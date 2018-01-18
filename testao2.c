@@ -79,6 +79,8 @@ void bcopy(const void *src, void *dest, size_t n);
 
 #define mem_numvar(type,num) mem_numvar_list(type,num,0)
 
+/* MACROS */
+#define	m_copy(in,out)	_m_copy(in,out,0,0)
 #define	v_copy(in,out)	_v_copy(in,out,0)
 
 #define	m_set_val(A,i,j,val)	((A)->me[(i)][(j)] = (val))
@@ -104,36 +106,46 @@ void bcopy(const void *src, void *dest, size_t n);
 
 #define	m_output(mat)	m_foutput(stdout,mat)
 
+#define NOT_SEGMENTED 1
+
+#ifndef NOT_SEGMENTED
+#define	SEGMENTED
+#endif
+
+#ifndef THREADSAFE	/* for use as a shared library */
+#define	THREADSAFE 1
+#endif
+
 /* vector definition */
 typedef	struct	{
 		unsigned int	dim, max_dim;
 		double	*ve;
-		} VEC;
+} VEC;
 
 /* matrix definition */
 typedef	struct	{
 		unsigned int	m, n;
 		unsigned int	max_m, max_n, max_size;
 		double	**me,*base;	/* base is base of alloc'd mem */
-		} MAT;
+} MAT;
 
 /* band matrix definition */
 typedef struct {
                MAT   *mat;       /* matrix */
                int   lb,ub;    /* lower and upper bandwidth */
-               } BAND;
+} BAND;
 
 
 /* permutation definition */
 typedef	struct	{
 		unsigned int	size, max_size, *pe;
-		} PERM;
+} PERM;
 
 /* integer vector definition */
 typedef struct	{
 		unsigned int	dim, max_dim;
 		int	*ive;
-	    } IVEC;
+} IVEC;
 
 /* structure for memory information */
 typedef struct {
@@ -196,7 +208,7 @@ void mem_bytes_list(int type, int old_size, int new_size, int list)
 	-- normally ALL matrices should be obtained this way
 	-- if either m or n is negative this will raise an error
 	-- note that 0 x n and m x 0 matrices can be created */
-MAT	*m_get(int m, int n)
+/*MAT	*m_get(int m, int n)
 {
    MAT	*matrix;
    int	i;
@@ -208,11 +220,54 @@ MAT	*m_get(int m, int n)
    matrix->max_m = m;	matrix->max_size = m*n;
    
    return (matrix);
+}*/
+
+/* m_get -- gets an mxn matrix (in MAT form) by dynamic memory allocation
+	-- normally ALL matrices should be obtained this way
+	-- if either m or n is negative this will raise an error
+	-- note that 0 x n and m x 0 matrices can be created */
+#ifndef ANSI_C
+MAT	*m_get(m,n)
+int	m,n;
+#else
+MAT	*m_get(int m, int n)
+#endif
+{
+   MAT	*matrix;
+   int	i;
+      mem_bytes(TYPE_MAT,0,sizeof(MAT));
+      mem_numvar(TYPE_MAT,1);
+   
+   matrix->m = m;		matrix->n = matrix->max_n = n;
+   matrix->max_m = m;	matrix->max_size = m*n;
+#ifndef SEGMENTED
+   if ((matrix->base = NEW_A(m*n,double)) == (double *)NULL )
+   {
+      free(matrix);
+   }
+   else {
+      mem_bytes(TYPE_MAT,0,m*n*sizeof(double));
+   }
+#else
+   matrix->base = (double *)NULL;
+#endif
+    mem_bytes(TYPE_MAT,0,m*sizeof(double *));
+   
+#ifndef SEGMENTED
+   /* set up pointers */
+   for ( i=0; i<m; i++ )
+     matrix->me[i] = &(matrix->base[i*n]);
+#else
+   for ( i = 0; i < m; i++ )
+	mem_bytes(TYPE_MAT,0,n*sizeof(double));
+#endif
+   
+   return (matrix);
 }
 
 /* m_resize -- returns the matrix A of size new_m x new_n; A is zeroed
    -- if A == NULL on entry then the effect is equivalent to m_get() */
-MAT	*m_resize(MAT *A,int new_m, int new_n)
+/*MAT	*m_resize(MAT *A,int new_m, int new_n)
 {
    int	i;
    int	new_max_m, new_max_n, old_m, old_n;
@@ -223,13 +278,13 @@ MAT	*m_resize(MAT *A,int new_m, int new_n)
    if ( ! A )
      return m_get(new_m,new_n);
 
-   /* nothing was changed */
+   // nothing was changed 
    if (new_m == A->m && new_n == A->n)
      return A;
 
    old_m = A->m;	old_n = A->n;
    if ( new_m > A->max_m )
-   {	/* re-allocate A->me */
+   {	// re-allocate A->me
 	 mem_bytes(TYPE_MAT,A->max_m*sizeof(double *),
 		      new_m*sizeof(double *));
       A->me = RENEW(A->me,new_m,double *);
@@ -243,11 +298,124 @@ MAT	*m_resize(MAT *A,int new_m, int new_n)
    A->m = new_m;	A->n = new_n;
    
    return A;
+}*/
+
+/* m_resize -- returns the matrix A of size new_m x new_n; A is zeroed
+   -- if A == NULL on entry then the effect is equivalent to m_get() */
+#ifndef ANSI_C
+MAT	*m_resize(A,new_m,new_n)
+MAT	*A;
+int	new_m, new_n;
+#else
+MAT	*m_resize(MAT *A,int new_m, int new_n)
+#endif
+{
+   int	i;
+   int	new_max_m, new_max_n, new_size, old_m, old_n;
+
+   if ( ! A )
+     return m_get(new_m,new_n);
+
+   /* nothing was changed */
+   if (new_m == A->m && new_n == A->n)
+     return A;
+
+   old_m = A->m;	old_n = A->n;
+   if ( new_m > A->max_m )
+   {	/* re-allocate A->me */
+	 mem_bytes(TYPE_MAT,A->max_m*sizeof(double *),
+		      new_m*sizeof(double_t *));
+
+      A->me = RENEW(A->me,new_m,double *);
+   }
+   new_max_m = max(new_m,A->max_m);
+   new_max_n = max(new_n,A->max_n);
+   
+#ifndef SEGMENTED
+   new_size = new_max_m*new_max_n;
+   if ( new_size > A->max_size )
+   {	/* re-allocate A->base */
+	 mem_bytes(TYPE_MAT,A->max_m*A->max_n*sizeof(double),
+		      new_size*sizeof(double));
+
+      A->base = RENEW(A->base,new_size,double);
+      A->max_size = new_size;
+   }
+   
+   /* now set up A->me[i] */
+   for ( i = 0; i < new_m; i++ )
+     A->me[i] = &(A->base[i*new_n]);
+   
+   /* now shift data in matrix */
+   if ( old_n > new_n )
+   {
+      for ( i = 1; i < min(old_m,new_m); i++ )
+	MEM_COPY((char *)&(A->base[i*old_n]),
+		 (char *)&(A->base[i*new_n]),
+		 sizeof(Real)*new_n);
+   }
+   else if ( old_n < new_n )
+   {
+      for ( i = (int)(min(old_m,new_m))-1; i > 0; i-- )
+      {   /* copy & then zero extra space */
+	 MEM_COPY((char *)&(A->base[i*old_n]),
+		  (char *)&(A->base[i*new_n]),
+		  sizeof(double)*old_n);
+	 __zero__(&(A->base[i*new_n+old_n]),(new_n-old_n));
+      }
+      __zero__(&(A->base[old_n]),(new_n-old_n));
+      A->max_n = new_n;
+   }
+   /* zero out the new rows.. */
+   for ( i = old_m; i < new_m; i++ )
+     __zero__(&(A->base[i*new_n]),new_n);
+#else
+   if ( A->max_n < new_n )
+   {
+      double	*tmp;
+      
+      for ( i = 0; i < A->max_m; i++ )
+      {
+	    mem_bytes(TYPE_MAT,A->max_n*sizeof(double),
+			 new_max_n*sizeof(double));
+
+	    A->me[i] = tmp;
+      }
+      for ( i = A->max_m; i < new_max_m; i++ )
+      {
+	    A->me[i] = tmp;
+	    mem_bytes(TYPE_MAT,0,new_max_n*sizeof(double));
+      }
+   }
+   else if ( A->max_m < new_m )
+   {
+      for ( i = A->max_m; i < new_m; i++ )
+	   mem_bytes(TYPE_MAT,0,new_max_n*sizeof(double));
+      
+   }
+   
+   if ( old_n < new_n )
+   {
+      for ( i = 0; i < old_m; i++ )
+	__zero__(&(A->me[i][old_n]),new_n-old_n);
+   }
+   
+   /* zero out the new rows.. */
+   for ( i = old_m; i < new_m; i++ )
+     __zero__(A->me[i],new_n);
+#endif
+   
+   A->max_m = new_max_m;
+   A->max_n = new_max_n;
+   A->max_size = A->max_m*A->max_n;
+   A->m = new_m;	A->n = new_n;
+   
+   return A;
 }
 
 /* m_copy -- copies matrix into new area
 	-- out(i0:m,j0:n) <- in(i0:m,j0:n) */
-MAT	*m_copy(const MAT *in, MAT *out, unsigned int i0, unsigned int j0)
+/*MAT	*m_copy(const MAT *in, MAT *out, unsigned int i0, unsigned int j0)
 {
 	unsigned int	i, j;
 
@@ -265,6 +433,93 @@ MAT	*m_copy(const MAT *in, MAT *out, unsigned int i0, unsigned int j0)
 			out->me[i][j] = in->me[i][j];
 
 	return (out);
+}*/
+
+/* _m_copy -- copies matrix into new area
+	-- out(i0:m,j0:n) <- in(i0:m,j0:n) */
+#ifndef ANSI_C
+MAT	*_m_copy(in,out,i0,j0)
+MAT	*in,*out;
+unsigned int	i0,j0;
+#else
+MAT	*_m_copy(const MAT *in, MAT *out, unsigned int i0, unsigned int j0)
+#endif
+{
+	unsigned int	i /* ,j */;
+
+	if ( in==out )
+		return (out);
+	if ( out==MNULL || out->m < in->m || out->n < in->n )
+		out = m_resize(out,in->m,in->n);
+
+	for ( i=i0; i < in->m; i++ )
+		MEM_COPY(&(in->me[i][j0]),&(out->me[i][j0]),
+				(in->n - j0)*sizeof(Real));
+		/* for ( j=j0; j < in->n; j++ )
+			out->me[i][j] = in->me[i][j]; */
+
+	return (out);
+}
+
+/* v_resize -- returns the vector x with dim new_dim
+   -- x is set to the zero vector */
+/*#ifndef ANSI_C
+VEC	*v_resize(x,new_dim)
+VEC	*x;
+int	new_dim;
+#else
+VEC	*v_resize(VEC *x, int new_dim)
+#endif
+{
+   if ( ! x )
+     return v_get(new_dim);
+
+   // nothing is changed
+   if (new_dim == x->dim)
+     return x;
+
+   if ( x->max_dim == 0 )	// assume that it's from sub_vec
+     return v_get(new_dim);
+   
+   if ( new_dim > x->max_dim )
+   {
+	 mem_bytes(TYPE_VEC,x->max_dim*sizeof(double),
+			 new_dim*sizeof(double));
+
+      x->ve = RENEW(x->ve,new_dim,double);
+      x->max_dim = new_dim;
+   }
+   
+   if ( new_dim > x->dim )
+     __zero__(&(x->ve[x->dim]),new_dim - x->dim);
+   x->dim = new_dim;
+   
+   return x;
+}*/
+
+/* v_get -- gets a VEC of dimension 'size'
+   -- Note: initialized to zero */
+#ifndef ANSI_C
+VEC	*v_get(size)
+int	size;
+#else
+VEC	*v_get(int size)
+#endif
+{
+   VEC	*vector;
+      mem_bytes(TYPE_VEC,0,sizeof(VEC));
+      mem_numvar(TYPE_VEC,1);
+   
+   vector->dim = vector->max_dim = size;
+   if ((vector->ve=NEW_A(size,Real)) == (double *)NULL )
+   {
+      free(vector);
+   }
+   else {
+      mem_bytes(TYPE_VEC,0,size*sizeof(double));
+   }
+   
+   return (vector);
 }
 
 /* v_resize -- returns the vector x with dim new_dim
@@ -566,36 +821,6 @@ double	__ip__(const double *dp1, const double *dp2, int len)
     return sum;
 }
 
-/* __mltadd__ -- scalar multiply and add c.f. v_mltadd() */
-#ifndef ANSI_C
-void	__mltadd__(dp1,dp2,s,len)
-register double	*dp1, *dp2;
-register double s;
-register int	len;
-#else
-void	__mltadd__(double *dp1, const double *dp2, double s, int len)
-#endif
-{
-    register int	i;
-#ifdef VUNROLL
-    register int        len4;
-    
-    len4 = len / 4;
-    len  = len % 4;
-    for ( i = 0; i < len4; i++ )
-    {
-	dp1[4*i]   += s*dp2[4*i];
-	dp1[4*i+1] += s*dp2[4*i+1];
-	dp1[4*i+2] += s*dp2[4*i+2];
-	dp1[4*i+3] += s*dp2[4*i+3];
-    }
-    dp1 += 4*len4;	dp2 += 4*len4;
-#endif
-    
-    for ( i = 0; i < len; i++ )
-	dp1[i] += s*dp2[i];
-}
-
 /* hhtrrows -- transform a matrix by a Householder vector by rows
 	starting at row i0 from column j0 -- in-situ
 	-- that is, M(i0:m,j0:n) <- M(i0:m,j0:n)(I-beta.hh(j0:n).hh(j0:n)^T) */
@@ -711,36 +936,6 @@ double	_in_prod(const VEC *a, const VEC *b, unsigned int i0)
 	******************************************/
 }
 
-/* __mltadd__ -- scalar multiply and add c.f. v_mltadd() */
-#ifndef ANSI_C
-void	__mltadd__(dp1,dp2,s,len)
-register double	*dp1, *dp2;
-register double s;
-register int	len;
-#else
-void	__mltadd__(double *dp1, const double *dp2, double s, int len)
-#endif
-{
-    register int	i;
-#ifdef VUNROLL
-    register int        len4;
-    
-    len4 = len / 4;
-    len  = len % 4;
-    for ( i = 0; i < len4; i++ )
-    {
-	dp1[4*i]   += s*dp2[4*i];
-	dp1[4*i+1] += s*dp2[4*i+1];
-	dp1[4*i+2] += s*dp2[4*i+2];
-	dp1[4*i+3] += s*dp2[4*i+3];
-    }
-    dp1 += 4*len4;	dp2 += 4*len4;
-#endif
-    
-    for ( i = 0; i < len; i++ )
-	dp1[i] += s*dp2[i];
-}
-
 /* hhtrvec -- apply Householder transformation to vector 
 	-- that is, out <- (I-beta.hh(i0:n).hh(i0:n)^T).in
 	-- may be in-situ */
@@ -809,6 +1004,10 @@ MAT	*makeHQ(MAT *H, VEC *diag, VEC *beta, MAT *Qout)
 		/* insert into Qout */
 		set_col(Qout,(unsigned int)i,tmp1);
 	}
+
+#ifdef THREADSAFE
+	V_FREE(tmp1);	V_FREE(tmp2);
+#endif
 
 	return (Qout);
 }
@@ -879,10 +1078,6 @@ MAT	*rot_cols(const MAT *mat,unsigned int i,unsigned int k,
 	unsigned int	j;
 	double	temp;
 
-	if ( mat==(MAT *)NULL )
-		error(E_NULL,"rot_cols");
-	if ( i >= mat->n || k >= mat->n )
-		error(E_RANGE,"rot_cols");
 	if ( mat != out )
 		out = m_copy(mat,m_resize(out,mat->m,mat->n));
 
@@ -1251,6 +1446,10 @@ MAT	*schur(MAT *A, MAT *Q)
 	    (fabs(A_me[i][i])+fabs(A_me[i+1][i+1])) )
 	    A_me[i+1][i] = 0.0;
 
+#ifdef	THREADSAFE
+    V_FREE(diag);	V_FREE(beta);
+#endif
+
     return A;
 }
 
@@ -1604,6 +1803,11 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 	    set_col(out,i,tmp2);
 	}
 
+#ifdef	THREADSAFE
+	V_FREE(tmp);	V_FREE(tmp2);
+	M_FREE(A_cp);	PX_FREE(pivot);
+#endif
+
 	return out;
 }
 
@@ -1833,7 +2037,9 @@ MAT	*m_pow(const MAT *A, int p, MAT *out)
    else
        out = _m_pow(A, p, wkspace, out);
 
+#ifdef	THREADSAFE
    M_FREE(wkspace);	M_FREE(tmp);
+#endif
 
    return out;
 }
