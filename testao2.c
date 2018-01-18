@@ -1,8 +1,3 @@
-#ifndef DSVERIFIER_TESTAOS_H
-#define DSVERIFIER_TESTAOS_H
-
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -106,6 +101,8 @@ void bcopy(const void *src, void *dest, size_t n);
 #define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
 #define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
 #define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
+
+#define	m_output(mat)	m_foutput(stdout,mat)
 
 /* vector definition */
 typedef	struct	{
@@ -1841,4 +1838,113 @@ MAT	*m_pow(const MAT *A, int p, MAT *out)
    return out;
 }
 
-#endif // DSVERIFIER_TESTAOS_H
+/* m_foutput -- prints a representation of the matrix a onto file/stream fp */
+#ifndef ANSI_C
+void    m_foutput(fp,a)
+FILE    *fp;
+MAT     *a;
+#else
+void    m_foutput(FILE *fp, const MAT *a)
+#endif
+{
+     unsigned int      i, j, tmp;
+     
+     if ( a == (MAT *)NULL )
+     {  fprintf(fp,"Matrix: NULL\n");   return;         }
+     fprintf(fp,"Matrix: %d by %d\n",a->m,a->n);
+     if ( a->me == (Real **)NULL )
+     {  fprintf(fp,"NULL\n");           return;         }
+     for ( i=0; i<a->m; i++ )   /* for each row... */
+     {
+	  fprintf(fp,"row %u: ",i);
+	  for ( j=0, tmp=2; j<a->n; j++, tmp++ )
+	  {             /* for each col in row... */
+	       fprintf(fp,format,a->me[i][j]);
+	       if ( ! (tmp % 5) )       putc('\n',fp);
+	  }
+	  if ( tmp % 5 != 1 )   putc('\n',fp);
+     }
+}
+
+void main(){
+    MAT *A = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
+    MAT *Q1_temp;
+    VEC *evals_re = VNULL, *evals_im = VNULL;
+    MAT *F = MNULL, *G = MNULL, *H = MNULL;
+    int k=3;
+    double y, x0;
+    complex double *z;
+    ZMAT *ZQ = ZMNULL, *ZQ_temp, *ZQ_inv = ZMNULL, *ZH, *ZF;
+
+   //setting up A matrix
+//    A=m_get(4,4);
+//    A->me[0][0]=-0.5000;A->me[0][1]=0.6000;A->me[0][2]=0;A->me[0][3]=0;
+//    A->me[1][0]=-0.6000;A->me[1][1]=-0.5000;A->me[1][2]=0;A->me[1][3]=0;
+//    A->me[2][0]=0;A->me[2][1]=0;A->me[2][2]=0.2000;A->me[2][3]=0.8000;
+//    A->me[3][0]=0;A->me[3][1]=0;A->me[3][2]=-0.8000;A->me[3][3]=0.2000;printf("A ");m_output(A);
+    A=m_get(5,5);
+    A->me[0][0]=-0.5000;A->me[0][1]=0.6000;A->me[0][2]=0;A->me[0][3]=0;A->me[0][4]=0;
+    A->me[1][0]=-0.6000;A->me[1][1]=-0.5000;A->me[1][2]=0;A->me[1][3]=0;A->me[1][4]=0;
+    A->me[2][0]=0;A->me[2][1]=0;A->me[2][2]=0.2000;A->me[2][3]=0.8000;A->me[2][4]=0;
+    A->me[3][0]=0;A->me[3][1]=0;A->me[3][2]=-0.8000;A->me[3][3]=0.2000;A->me[3][4]=0;
+    A->me[4][0]=0;A->me[4][1]=0;A->me[4][2]=0;A->me[4][3]=0;A->me[4][4]=0.6;printf("A ");m_output(A);
+    //setting up B matrix
+//    B=m_get(4,1);
+//    B->me[0][0]=0;
+//    B->me[1][0]=0;
+//    B->me[2][0]=2.5;
+//    B->me[3][0]=1;printf("B ");m_output(B);
+    B=m_get(5,1);
+    B->me[0][0]=0;
+    B->me[1][0]=0;
+    B->me[2][0]=2.5;
+    B->me[3][0]=1;
+    B->me[4][0]=0;printf("B ");m_output(B);
+    //setting up C matrix
+//    C=m_get(1,4);
+//    C->me[0][0]=0;C->me[0][1]=2.6;C->me[0][2]=0.5;C->me[0][3]=1.2;printf("C ");m_output(C);
+        C=m_get(1,5);
+        C->me[0][0]=0;C->me[0][1]=2.6;C->me[0][2]=0.5;C->me[0][3]=1.2;C->me[0][4]=0;printf("C ");m_output(C);
+    //setting up D matrix
+    D=m_get(1,1);
+    D->me[0][0]=0;printf("D ");m_output(D);
+    printf("-----------------------------------------------------------\n");
+    printf("k_ss=%d\n",k_ss(A,B,C,D,5,1.0f));
+
+	m_output(m_pow(A));
+
+//    /* read in A matrix */
+//    printf("Input A matrix:\n");
+//
+//    A = m_input(MNULL);     /* A has whatever size is input */
+//    //B = m_input(MNULL);     /* B has whatever size is input */
+//
+//    if ( A->m < A->n )
+//    {
+//        printf("Need m >= n to obtain least squares fit\n");
+//        exit(0);
+//    }
+//    printf("# A =\n");       m_output(A);
+//
+//    //zm_output(zm_A_bar(A));
+//
+//    Q = m_get(A->m,A->n);
+//    T = m_copy(A,MNULL);
+//
+//    /* compute Schur form: A = Q.T.Q^T */
+//    schur(T,Q);
+//    /* extract eigenvalues */
+//    evals_re = v_get(A->m);
+//    evals_im = v_get(A->m);
+//    schur_evals(T,evals_re,evals_im);
+//
+//    z=malloc(evals_re->dim*sizeof(complex double));
+//    for(int i=0;i<evals_re->dim;i++){
+//    	z[i]=evals_re->ve[i]+I*evals_im->ve[i];
+//    	printf("Z[%d]=%f + i%f\n", i, creal(z[i]), cimag(z[i]));
+//    }
+//
+//    size_t size=(size_t)sizeof(z);
+//    printf("Maximum:%f\n",maxMagEigVal(z,size));
+
+}
