@@ -687,6 +687,31 @@ VEC	*_v_copy(const VEC *in, VEC *out, unsigned int i0)
 	return (out);
 }
 
+/* _in_prod -- inner product of two vectors from i0 downwards
+	-- that is, returns a(i0:dim)^T.b(i0:dim) */
+#ifndef ANSI_C
+double	_in_prod(a,b,i0)
+VEC	*a,*b;
+unsigned int	i0;
+#else
+double	_in_prod(const VEC *a, const VEC *b, unsigned int i0)
+#endif
+{
+	unsigned int	limit;
+	/* double	*a_v, *b_v; */
+	/* register double	sum; */
+
+	return __ip__(&(a->ve[i0]),&(b->ve[i0]),(int)(limit-i0));
+	/*****************************************
+	a_v = &(a->ve[i0]);		b_v = &(b->ve[i0]);
+	for ( i=i0; i<limit; i++ )
+		sum += a_v[i]*b_v[i];
+		sum += (*a_v++)*(*b_v++);
+
+	return (double)sum;
+	******************************************/
+}
+
 /* hhvec -- calulates Householder vector to eliminate all entries after the
 	i0 entry of the vector vec. It is returned as out. May be in-situ */
 #ifndef ANSI_C
@@ -936,31 +961,6 @@ MAT	*Hfactor(MAT *A, VEC *diag, VEC *beta)
 #endif
 
 	return (A);
-}
-
-/* _in_prod -- inner product of two vectors from i0 downwards
-	-- that is, returns a(i0:dim)^T.b(i0:dim) */
-#ifndef ANSI_C
-double	_in_prod(a,b,i0)
-VEC	*a,*b;
-unsigned int	i0;
-#else
-double	_in_prod(const VEC *a, const VEC *b, unsigned int i0)
-#endif
-{
-	unsigned int	limit;
-	/* double	*a_v, *b_v; */
-	/* register double	sum; */
-
-	return __ip__(&(a->ve[i0]),&(b->ve[i0]),(int)(limit-i0));
-	/*****************************************
-	a_v = &(a->ve[i0]);		b_v = &(b->ve[i0]);
-	for ( i=i0; i<limit; i++ )
-		sum += a_v[i]*b_v[i];
-		sum += (*a_v++)*(*b_v++);
-
-	return (double)sum;
-	******************************************/
 }
 
 /* hhtrvec -- apply Householder transformation to vector 
