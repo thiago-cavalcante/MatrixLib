@@ -687,6 +687,46 @@ VEC	*_v_copy(const VEC *in, VEC *out, unsigned int i0)
 	return (out);
 }
 
+/* __ip__ -- inner product */
+#ifndef ANSI_C
+double	__ip__(dp1,dp2,len)
+register double	*dp1, *dp2;
+int	len;
+#else
+double	__ip__(const double *dp1, const double *dp2, int len)
+#endif
+{
+#ifdef VUNROLL
+    register int	len4;
+    register double	sum1, sum2, sum3;
+#endif
+    register int	i;
+    register double     sum;
+
+    sum = 0.0;
+#ifdef VUNROLL
+    sum1 = sum2 = sum3 = 0.0;
+    
+    len4 = len / 4;
+    len  = len % 4;
+    
+    for ( i = 0; i < len4; i++ )
+    {
+	sum  += dp1[4*i]*dp2[4*i];
+	sum1 += dp1[4*i+1]*dp2[4*i+1];
+	sum2 += dp1[4*i+2]*dp2[4*i+2];
+	sum3 += dp1[4*i+3]*dp2[4*i+3];
+    }
+    sum  += sum1 + sum2 + sum3;
+    dp1 += 4*len4;	dp2 += 4*len4;
+#endif
+    
+    for ( i = 0; i < len; i++ )
+	sum  += dp1[i]*dp2[i];
+    
+    return sum;
+}
+
 /* _in_prod -- inner product of two vectors from i0 downwards
 	-- that is, returns a(i0:dim)^T.b(i0:dim) */
 #ifndef ANSI_C
