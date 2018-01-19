@@ -199,10 +199,10 @@ static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];
 
 /* it is a global variable for passing 
    pointers to local arrays defined here */
-MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS] = {
- { mem_type_names, MEM_NUM_STD_TYPES, 
-     mem_info_sum } 
-};
+MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS];
+mem_connect[0] = mem_type_names;
+mem_connect[1] = MEM_NUM_STD_TYPES;
+mem_connect[2] = mem_info_sum;
 
 /* mem_bytes_list
    
