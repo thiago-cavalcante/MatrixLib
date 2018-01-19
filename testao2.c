@@ -872,7 +872,7 @@ MAT	*_hhtrcols(MAT *M, unsigned int i0, unsigned int j0,
 }
 
 /* __ip__ -- inner product */
-#ifndef ANSI_C
+/*#ifndef ANSI_C
 double	__ip__(dp1,dp2,len)
 register double	*dp1, *dp2;
 int	len;
@@ -909,7 +909,7 @@ double	__ip__(const double *dp1, const double *dp2, int len)
 	sum  += dp1[i]*dp2[i];
     
     return sum;
-}
+}*/
 
 /* hhtrrows -- transform a matrix by a Householder vector by rows
 	starting at row i0 from column j0 -- in-situ
