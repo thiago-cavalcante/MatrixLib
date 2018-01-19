@@ -22,7 +22,7 @@ void bcopy(const void *src, void *dest, size_t n);
 #define TYPE_IVEC		4
 
 /* max number of lists of types */
-#define MEM_CONNECT_MAX_LISTS    5
+#define MEM_CONNECT_MAX_LISTS    3
 
 #define	v_chk_idx(x,i)		((i)>=0 && (i)<(x)->dim)
 
