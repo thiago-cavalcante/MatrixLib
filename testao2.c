@@ -27,7 +27,7 @@ void bcopy(const void *src, void *dest, size_t n);
 #define	v_chk_idx(x,i)		((i)>=0 && (i)<(x)->dim)
 
 #define	v_get_val(x,i)	( v_chk_idx(x,i) ? (x)->ve[(i)] : \
-	(printf(Error!))))
+	(printf("Error!")))
 
 #define	v_entry(x,i)		v_get_val(x,i)
 
@@ -58,7 +58,7 @@ void bcopy(const void *src, void *dest, size_t n);
 #define mem_bytes(type,old_size,new_size)  \
   mem_bytes_list(type,old_size,new_size,0)
 
-#define	v_set_val(x,i,val)	((x)->ve[(i)] = (val))
+#define	v_set_val(x,i,val)	(x->ve[i] = val)
 
 /* macros */
 
@@ -85,7 +85,7 @@ void bcopy(const void *src, void *dest, size_t n);
 
 #define	m_set_val(A,i,j,val)	((A)->me[(i)][(j)] = (val))
 #define	m_get_val(A,i,j)	( m_chk_idx(A,i,j) ? \
-	(A)->me[(i)][(j)] : (error(E_BOUNDS,"m_get_val"), 0.0))
+	(A)->me[(i)][(j)] : (printf("Error!")))
 
 #define	m_entry(A,i,j)		m_get_val(A,i,j)
 #define	v_entry(x,i)		v_get_val(x,i)
@@ -179,6 +179,13 @@ void	__zero__(double *dp, int len)
 	  dp[i] = 0.0;
 #endif
 }
+
+/* it is a global variable for passing 
+   pointers to local arrays defined here */
+MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS] = {
+ { mem_type_names, mem_free_funcs, MEM_NUM_STD_TYPES, 
+     mem_info_sum } 
+};
 
 /* mem_bytes_list
    
@@ -352,7 +359,7 @@ MAT	*m_resize(MAT *A,int new_m, int new_n)
       for ( i = 1; i < min(old_m,new_m); i++ )
 	MEM_COPY((char *)&(A->base[i*old_n]),
 		 (char *)&(A->base[i*new_n]),
-		 sizeof(Real)*new_n);
+		 sizeof(double)*new_n);
    }
    else if ( old_n < new_n )
    {
@@ -454,7 +461,7 @@ MAT	*_m_copy(const MAT *in, MAT *out, unsigned int i0, unsigned int j0)
 
 	for ( i=i0; i < in->m; i++ )
 		MEM_COPY(&(in->me[i][j0]),&(out->me[i][j0]),
-				(in->n - j0)*sizeof(Real));
+				(in->n - j0)*sizeof(double));
 		/* for ( j=j0; j < in->n; j++ )
 			out->me[i][j] = in->me[i][j]; */
 
@@ -511,7 +518,7 @@ VEC	*v_get(int size)
       mem_numvar(TYPE_VEC,1);
    
    vector->dim = vector->max_dim = size;
-   if ((vector->ve=NEW_A(size,Real)) == (double *)NULL )
+   if ((vector->ve=NEW_A(size,double)) == (double *)NULL )
    {
       free(vector);
    }
@@ -675,10 +682,11 @@ VEC	*hhvec(const VEC *vec, unsigned int i0, double *beta,
 	       VEC *out, double *newval)
 #endif
 {
-	double	norm;
+	double	norm,temp;
 
 	out = _v_copy(vec,out,i0);
-	norm = sqrt(_in_prod(out,out,i0));
+	temp = v_entry(beta,k);
+	norm = sqrt(temp);
 	if ( norm <= 0.0 )
 	{
 		*beta = 0.0;
@@ -878,6 +886,7 @@ MAT	*Hfactor(MAT *A, VEC *diag, VEC *beta)
 {
 	static	VEC	*hh = VNULL, *w = VNULL;
 	int	k, limit;
+	double b;
 
 	limit = A->m - 1;
 
@@ -899,8 +908,9 @@ MAT	*Hfactor(MAT *A, VEC *diag, VEC *beta)
 	    /* printf("beta = %g\n",beta->ve[k]); */
 
 	    /* apply Householder operation symmetrically to A */
-	    _hhtrcols(A,k+1,k+1,hh,v_entry(beta,k),w);
-	    hhtrrows(A,0  ,k+1,hh,v_entry(beta,k));
+		b = v_entry(beta,k);
+	    _hhtrcols(A,k+1,k+1,hh,b,w);
+	    hhtrrows(A,0  ,k+1,hh,b);
 	    /* printf("A = ");		m_output(A); */
 	  }
 
@@ -2044,6 +2054,8 @@ MAT	*m_pow(const MAT *A, int p, MAT *out)
    return out;
 }
 
+static const char    *format = "%14.9g ";
+
 /* m_foutput -- prints a representation of the matrix a onto file/stream fp */
 #ifndef ANSI_C
 void    m_foutput(fp,a)
@@ -2058,7 +2070,7 @@ void    m_foutput(FILE *fp, const MAT *a)
      if ( a == (MAT *)NULL )
      {  fprintf(fp,"Matrix: NULL\n");   return;         }
      fprintf(fp,"Matrix: %d by %d\n",a->m,a->n);
-     if ( a->me == (Real **)NULL )
+     if ( a->me == (double **)NULL )
      {  fprintf(fp,"NULL\n");           return;         }
      for ( i=0; i<a->m; i++ )   /* for each row... */
      {
@@ -2074,13 +2086,13 @@ void    m_foutput(FILE *fp, const MAT *a)
 
 void main(){
     MAT *A = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
-    MAT *Q1_temp;
+    MAT *Q1_temp, *Test = MNULL;
     VEC *evals_re = VNULL, *evals_im = VNULL;
     MAT *F = MNULL, *G = MNULL, *H = MNULL;
     int k=3;
     double y, x0;
     complex double *z;
-    ZMAT *ZQ = ZMNULL, *ZQ_temp, *ZQ_inv = ZMNULL, *ZH, *ZF;
+    //ZMAT *ZQ = ZMNULL, *ZQ_temp, *ZQ_inv = ZMNULL, *ZH, *ZF;
 
    //setting up A matrix
 //    A=m_get(4,4);
@@ -2116,8 +2128,8 @@ void main(){
     D->me[0][0]=0;printf("D ");m_output(D);
     printf("-----------------------------------------------------------\n");
     printf("k_ss=%d\n",k_ss(A,B,C,D,5,1.0f));
-
-	m_output(m_pow(A));
+    Test = m_pow(A,2,Test);
+	m_output(Test);
 
 //    /* read in A matrix */
 //    printf("Input A matrix:\n");
