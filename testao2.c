@@ -702,7 +702,7 @@ VEC	*hhvec(const VEC *vec, unsigned int i0, double *beta,
 	double	norm,temp;
 
 	out = _v_copy(vec,out,i0);
-	temp = _in_prod(out,out,i0);
+	temp = (double)_in_prod(out,out,i0);
 	norm = sqrt(temp);
 	if ( norm <= 0.0 )
 	{
