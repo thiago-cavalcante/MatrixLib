@@ -189,9 +189,9 @@ static char *mem_type_names[] = {
 #define MEM_NUM_STD_TYPES  (sizeof(mem_type_names)/sizeof(mem_type_names[0]))
 
 /* for freeing various types */
-static int (*mem_free_funcs[MEM_NUM_STD_TYPES])() = {
-   m_free,   
-   v_free};
+/*static int (*mem_free_funcs[MEM_NUM_STD_TYPES])() = {
+   m_free,
+   v_free};*/
 
 /* local array for keeping track of memory */
 static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];  
@@ -200,7 +200,7 @@ static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];
 /* it is a global variable for passing 
    pointers to local arrays defined here */
 MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS] = {
- { mem_type_names, mem_free_funcs, MEM_NUM_STD_TYPES, 
+ { mem_type_names, MEM_NUM_STD_TYPES, 
      mem_info_sum } 
 };
 
@@ -976,10 +976,11 @@ VEC	*hhtrvec(const VEC *hh, double beta, unsigned int i0,
 		 const VEC *in, VEC *out)
 #endif
 {
-	double	scale;
+	double	scale,temp;
 	/* unsigned int	i; */
 
-	scale = beta*_in_prod(hh,in,i0);
+	temp = (double)_in_prod(hh,in,i0);
+	scale = beta*temp;
 	out = v_copy(in,out);
 	__mltadd__(&(out->ve[i0]),&(hh->ve[i0]),-scale,(int)(in->dim-i0));
 	/************************************************************
