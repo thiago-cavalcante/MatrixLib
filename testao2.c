@@ -180,6 +180,23 @@ void	__zero__(double *dp, int len)
 #endif
 }
 
+/* names of types */
+static char *mem_type_names[] = {
+   "MAT",
+   "PERM",
+   "VEC"};
+
+#define MEM_NUM_STD_TYPES  (sizeof(mem_type_names)/sizeof(mem_type_names[0]))
+
+/* for freeing various types */
+static int (*mem_free_funcs[MEM_NUM_STD_TYPES])() = {
+   m_free,   
+   v_free};
+
+/* local array for keeping track of memory */
+static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];  
+
+
 /* it is a global variable for passing 
    pointers to local arrays defined here */
 MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS] = {
@@ -685,7 +702,7 @@ VEC	*hhvec(const VEC *vec, unsigned int i0, double *beta,
 	double	norm,temp;
 
 	out = _v_copy(vec,out,i0);
-	temp = v_entry(beta,k);
+	temp = _in_prod(out,out,i0);
 	norm = sqrt(temp);
 	if ( norm <= 0.0 )
 	{
@@ -1983,12 +2000,10 @@ int	px_free(PERM *px)
    }
    else
    {
-      if (mem_info_is_on()) {
 	 mem_bytes(TYPE_PERM,sizeof(PERM)+px->max_size*sizeof(unsigned int),0);
 	 mem_numvar(TYPE_PERM,-1);
-      }
-      free((char *)px->pe);
-      free((char *)px);
+     free((char *)px->pe);
+     free((char *)px);
    }
    
    return (0);
