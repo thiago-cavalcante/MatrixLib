@@ -100,9 +100,9 @@ void bcopy(const void *src, void *dest, size_t n);
 #define MACHEPS 2.22045e-16
 
 /* macros that also check types and sets pointers to NULL */
-#define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
-#define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
-#define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
+//#define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
+//#define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
+//#define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
 
 #define	m_output(mat)	m_foutput(stdout,mat)
 
@@ -2038,6 +2038,11 @@ int	v_free(VEC *vec)
    
    return (0);
 }
+
+/* macros that also check types and sets pointers to NULL */
+#define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
+#define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
+#define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
 
 /* m_pow -- computes integer powers of a square matrix A, A^p */
 #ifndef ANSI_C
