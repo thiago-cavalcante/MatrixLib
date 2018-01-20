@@ -180,6 +180,8 @@ void	__zero__(double *dp, int len)
 #endif
 }
 
+MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS];
+
 /* names of types */
 static char *mem_type_names[] = {
    "MAT",
@@ -199,13 +201,11 @@ static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];
 
 /* it is a global variable for passing 
    pointers to local arrays defined here */
-MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS];
 mem_connect[0] = mem_type_names;
 mem_connect[1] = MEM_NUM_STD_TYPES;
 mem_connect[2] = mem_info_sum;
 
 /* mem_bytes_list
-   
    Arguments:
    type - the number of type;
    old_size - old size of allocated memory (in bytes);
