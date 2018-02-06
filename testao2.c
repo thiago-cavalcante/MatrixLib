@@ -55,8 +55,8 @@ void bcopy(const void *src, void *dest, size_t n);
 #define	min(a,b)	((a) > (b) ? (b) : (a))
 #endif /* min */
 
-#define mem_bytes(type,old_size,new_size)  \
-  mem_bytes_list(type,old_size,new_size,0)
+//#define mem_bytes(type,old_size,new_size)  \
+//  mem_bytes_list(type,old_size,new_size,0)
 
 #define	v_set_val(x,i,val)	(x->ve[i] = val)
 
@@ -180,8 +180,6 @@ void	__zero__(double *dp, int len)
 #endif
 }
 
-MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS];
-
 /* names of types */
 static char *mem_type_names[] = {
    "MAT",
@@ -189,21 +187,24 @@ static char *mem_type_names[] = {
    "VEC"};
 
 #define MEM_NUM_STD_TYPES  (sizeof(mem_type_names)/sizeof(mem_type_names[0]))
+/* local array for keeping track of memory */
+static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];  
+
+MEM_CONNECT mem_connect[MEM_CONNECT_MAX_LISTS] = {mem_type_names,MEM_NUM_STD_TYPES,mem_info_sum};
+
 
 /* for freeing various types */
 /*static int (*mem_free_funcs[MEM_NUM_STD_TYPES])() = {
    m_free,
    v_free};*/
 
-/* local array for keeping track of memory */
-static MEM_ARRAY   mem_info_sum[MEM_NUM_STD_TYPES];  
 
 
 /* it is a global variable for passing 
    pointers to local arrays defined here */
-mem_connect[0] = mem_type_names;
-mem_connect[1] = MEM_NUM_STD_TYPES;
-mem_connect[2] = mem_info_sum;
+//mem_connect[0] = mem_type_names;
+//mem_connect[1] = MEM_NUM_STD_TYPES;
+//mem_connect[2] = mem_info_sum;
 
 /* mem_bytes_list
    Arguments:
@@ -226,7 +227,8 @@ void mem_bytes_list(int type, int old_size, int new_size, int list)
 
    mlist->info_sum[type].bytes += new_size - old_size;
 }
-
+#define mem_bytes(type,old_size,new_size)  \
+  mem_bytes_list(type,old_size,new_size,0)
 
 /* m_get -- gets an mxn matrix (in MAT form) by dynamic memory allocation
 	-- normally ALL matrices should be obtained this way
