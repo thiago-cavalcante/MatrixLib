@@ -6,7 +6,7 @@
 void bcopy(const void *src, void *dest, size_t n);
 
 
-#define	MEM_COPY(from,to,size)	bcopy((char *)(from),(char *)(to),(int)(size))
+//#define	MEM_COPY(from,to,size)	bcopy((char *)(from),(char *)(to),(int)(size))
 
 /* miscellaneous constants */
 #define	VNULL	((VEC *)NULL)
@@ -74,8 +74,8 @@ void bcopy(const void *src, void *dest, size_t n);
 #define mem_stat_free(mark)
 #endif
 
-#define mem_bytes(type,old_size,new_size)  \
-  mem_bytes_list(type,old_size,new_size,0)
+//#define mem_bytes(type,old_size,new_size)  \
+//  mem_bytes_list(type,old_size,new_size,0)
 
 #define mem_numvar(type,num) mem_numvar_list(type,num,0)
 
