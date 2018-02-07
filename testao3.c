@@ -10,6 +10,11 @@
 #define	MNULL	((MAT *)NULL)
 #define	PNULL	((PERM *)NULL)
 
+/* macros that also check types and sets pointers to NULL */
+#define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
+#define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
+#define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
+
 /* available standard types */
 #define TYPE_NULL              (-1)
 //#define TYPE_MAT    	        0
@@ -620,6 +625,105 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 #endif
 
 	return out;
+}
+
+/* m_free -- returns MAT & asoociated memory back to memory heap */
+#ifndef ANSI_C
+int	m_free(mat)
+MAT	*mat;
+#else
+int	m_free(MAT *mat)
+#endif
+{
+#ifdef SEGMENTED
+   int	i;
+#endif
+   
+   if ( mat==(MAT *)NULL || (int)(mat->m) < 0 ||
+       (int)(mat->n) < 0 )
+     /* don't trust it */
+     return (-1);
+   
+#ifndef SEGMENTED
+   if ( mat->base != (double *)NULL ) {
+     mat->base = (double *)malloc(mat->max_m*mat->max_n * sizeof(double));
+     free((char *)(mat->base));
+   }
+#else
+   for ( i = 0; i < mat->max_m; i++ )
+     if ( mat->me[i] != (double *)NULL ) {
+	   mat->me[i] = (double *)malloc(mat->max_n * sizeof(double));
+	free((char *)(mat->me[i]));
+     }
+#endif
+   if ( mat->me != (double **)NULL ) {
+     mat->me = (double **)malloc(mat->max_m * sizeof(double*));
+      free((char *)(mat->me));
+   }
+
+	  mat = malloc(sizeof *mat);
+   free((char *)mat);
+   
+   return (0);
+}
+
+/* px_free -- returns PERM & asoociated memory back to memory heap */
+#ifndef ANSI_C
+int	px_free(px)
+PERM	*px;
+#else
+int	px_free(PERM *px)
+#endif
+{
+   if ( px==(PERM *)NULL || (int)(px->size) < 0 )
+     /* don't trust it */
+     return (-1);
+   
+   if ( px->pe == (unsigned int *)NULL ) {
+	 px = malloc(sizeof *px);
+      
+      free((char *)px);
+   }
+   else
+   {
+	 px = malloc(sizeof *px);
+	 px->pe = (unsigned int *)malloc(px->max_size*sizeof(unsigned int));
+     free((char *)px->pe);
+     free((char *)px);
+   }
+   
+   return (0);
+}
+
+
+
+/* v_free -- returns VEC & asoociated memory back to memory heap */
+#ifndef ANSI_C
+int	v_free(vec)
+VEC	*vec;
+#else
+int	v_free(VEC *vec)
+#endif
+{
+   if ( vec==(VEC *)NULL || (int)(vec->dim) < 0 )
+     /* don't trust it */
+     return (-1);
+   
+   if ( vec->ve == (double *)NULL ) {
+	 vec = malloc(sizeof *vec);
+      free((char *)vec);
+   }
+   else
+   {
+	 mem_bytes(TYPE_VEC,sizeof(VEC)+vec->max_dim*sizeof(double),0);
+	 mem_numvar(TYPE_VEC,-1);
+	 vec = malloc(sizeof *vec);
+	 vec->ve = (double *)malloc(vec->max_dim*sizeof(double));
+      free((char *)vec->ve);
+      free((char *)vec);
+   }
+   
+   return (0);
 }
 
 void main(){
