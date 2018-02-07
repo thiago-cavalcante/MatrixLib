@@ -715,8 +715,6 @@ int	v_free(VEC *vec)
    }
    else
    {
-	 mem_bytes(TYPE_VEC,sizeof(VEC)+vec->max_dim*sizeof(double),0);
-	 mem_numvar(TYPE_VEC,-1);
 	 vec = malloc(sizeof *vec);
 	 vec->ve = (double *)malloc(vec->max_dim*sizeof(double));
       free((char *)vec->ve);
