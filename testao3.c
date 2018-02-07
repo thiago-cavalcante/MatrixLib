@@ -495,9 +495,7 @@ VEC	*v_resize(VEC *x, int new_dim)
    }
    else if( new_dim < x->dim )
    {
-	 int del_rows = x->dim - new_dim;
-     for ( int i = 1; i <= del_rows; i++ )
-	     free( (char*)ptr[x->dim-i] );
+	 ptr = realloc( ptr, new_dim * sizeof *ptr );
    }
 
    x->dim = new_dim;
