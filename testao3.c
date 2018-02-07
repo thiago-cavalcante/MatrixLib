@@ -1227,6 +1227,7 @@ void main(){
 	printf("hereweare!\n");
     A5 = m_inverse(A,A5);
 	printf("hereweare2!\n");
+	printf("testing2= %f \n",A5->me[0][0]);
     m_output(A5);
 	printf("hereweare3!\n");
 //    printf("testing /n");
