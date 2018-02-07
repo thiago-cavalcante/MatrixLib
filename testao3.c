@@ -1177,10 +1177,106 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 	return out;
 }
 
+/* mat_id -- set A to being closest to identity matrix as possible
+	-- i.e. A[i][j] == 1 if i == j and 0 otherwise */
+#ifndef ANSI_C
+MAT	*m_ident(A)
+MAT	*A;
+#else
+MAT	*m_ident(MAT *A)
+#endif
+{
+	int	i, size;
+
+	m_zero(A);
+	size = min(A->m,A->n);
+	for ( i = 0; i < size; i++ )
+		A->me[i][i] = 1.0;
+
+	return A;
+}
+
+/* _m_pow -- computes integer powers of a square matrix A, A^p
+   -- uses tmp as temporary workspace */
+#ifndef ANSI_C
+MAT	*_m_pow(A, p, tmp, out)
+MAT	*A, *tmp, *out;
+int	p;
+#else
+MAT	*_m_pow(const MAT *A, int p, MAT *tmp, MAT *out)
+#endif
+{
+   int		it_cnt, k, max_bit;
+
+#define	Z(k)	(((k) & 1) ? tmp : out)
+   
+   out = m_resize(out,A->m,A->n);
+   tmp = m_resize(tmp,A->m,A->n);
+   
+   if ( p == 0 )
+     m_ident(out);
+   else if ( p > 0 )
+   {
+      it_cnt = 1;
+      for ( max_bit = 0; ; max_bit++ )
+	if ( (p >> (max_bit+1)) == 0 )
+	  break;
+      tmp = m_copy(A,tmp);
+      
+      for ( k = 0; k < max_bit; k++ )
+      {
+	 m_mlt(Z(it_cnt),Z(it_cnt),Z(it_cnt+1));
+	 it_cnt++;
+	 if ( p & (1 << (max_bit-1)) )
+	 {
+	    m_mlt(A,Z(it_cnt),Z(it_cnt+1));
+	    /* m_copy(Z(it_cnt),out); */
+	    it_cnt++;
+	 }
+	 p <<= 1;
+      }
+      if (it_cnt & 1)
+	out = m_copy(Z(it_cnt),out);
+   }
+
+   return out;
+
+#undef Z   
+}
+
+/* m_pow -- computes integer powers of a square matrix A, A^p */
+#ifndef ANSI_C
+MAT	*m_pow(A, p, out)
+MAT	*A, *out;
+int	p;
+#else
+MAT	*m_pow(const MAT *A, int p, MAT *out)
+#endif
+{
+   static MAT	*wkspace=MNULL, *tmp=MNULL;
+   
+   
+   wkspace = m_resize(wkspace,A->m,A->n);
+   MEM_STAT_REG(wkspace,TYPE_MAT);
+   if ( p < 0 )
+   {
+       tmp = m_resize(tmp,A->m,A->n);
+       MEM_STAT_REG(tmp,TYPE_MAT);
+       out = _m_pow(tmp, -p, wkspace, out);
+   }
+   else
+       out = _m_pow(A, p, wkspace, out);
+
+#ifdef	THREADSAFE
+   M_FREE(wkspace);	M_FREE(tmp);
+#endif
+
+   return out;
+}
 
 void main(){
 	printf("testing \n");
-    MAT *A = MNULL, *A2 = MNULL, *A3 = MNULL, *A4 = MNULL, *A5 = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
+    MAT *A = MNULL, *A2 = MNULL, *A3 = MNULL, *A4 = MNULL, *A5 = MNULL, *A6 = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
     MAT *Q1_temp, *Test = MNULL;
     //VEC *evals_re = VNULL, *evals_im = VNULL;
     MAT *F = MNULL, *G = MNULL, *H = MNULL;
@@ -1196,13 +1292,11 @@ void main(){
 //    A->me[2][0]=0;A->me[2][1]=0;A->me[2][2]=0.2000;A->me[2][3]=0.8000;
 //    A->me[3][0]=0;A->me[3][1]=0;A->me[3][2]=-0.8000;A->me[3][3]=0.2000;printf("A ");m_output(A);
     A=m_get(5,5);
-    printf("testing \n");
     A->me[0][0]=-0.5000;A->me[0][1]=0.6000;A->me[0][2]=0;A->me[0][3]=0;A->me[0][4]=0;
     A->me[1][0]=-0.6000;A->me[1][1]=-0.5000;A->me[1][2]=0;A->me[1][3]=0;A->me[1][4]=0;
     A->me[2][0]=0;A->me[2][1]=0;A->me[2][2]=0.2000;A->me[2][3]=0.8000;A->me[2][4]=0;
     A->me[3][0]=0;A->me[3][1]=0;A->me[3][2]=-0.8000;A->me[3][3]=0.2000;A->me[3][4]=0;
     A->me[4][0]=0;A->me[4][1]=0;A->me[4][2]=0;A->me[4][3]=0;A->me[4][4]=0.6;printf("A ");
-    printf("testing %f \n",A->me[0][0]);
     m_output(A);
     A2=m_get(5,5);
     A2 = m_add(A, A, A2);
@@ -1214,12 +1308,11 @@ void main(){
     A4 = m_mlt(A, A, A4);
     m_output(A4);
 	A5=m_get(5,5);
-	printf("hereweare!\n");
     A5 = m_inverse(A,A5);
-	printf("hereweare2!\n");
-	printf("testing2= %f \n",A5->me[0][0]);
     m_output(A5);
-	printf("hereweare3!\n");
+	A6=m_get(5,5);
+    A6 = m_pow(A,3,A6);
+    m_output(A6);
 //    printf("testing /n");
     //setting up B matrix
 //    B=m_get(4,1);
