@@ -1140,49 +1140,39 @@ MAT	*A, *out;
 MAT	*m_inverse(const MAT *A, MAT *out)
 #endif
 {
-	int i, j, k, n;
-	double d;
-    n = A->m;
-	if ( ! out || out->m < A->m || out->n < A->n )
-	{
-	    out = m_resize(out,A->m,A->n);
+  int i,j,k,matsize;
+  float temp;
+
+  matsize = A->m;
+  
+	for(i=0;i<matsize;i++)									//automatically initialize the unit matrix, e.g.
+		for(j=0;j<matsize;j++)								//	-       -
+			if(i==j)										// | 1  0  0 |
+				out->me[i][j]=1;								// | 0  1  0 |
+			else											// | 0  0  1 |
+				out->me[i][j]=0;								//  -       -
+/*---------------LoGiC starts here------------------*/		//procedure to make the matrix A to unit matrix
+	for(k=0;k<matsize;k++)									//by some row operations,and the same row operations of
+	{														//Unit mat. I gives the inverse of matrix A
+		temp=A->me[k][k];										//'temp' stores the A[k][k] value so that A[k][k] will not change
+		for(j=0;j<matsize;j++)								//during the operation A[i][j]/=A[k][k] when i=j=k
+		{
+			A->me[k][j]/=temp;									//it performs the following row operations to make A to unit matrix
+			out->me[k][j]/=temp;									//R0=R0/A[0][0],similarly for I also R0=R0/A[0][0]
+		}													//R1=R1-R0*A[1][0] similarly for I
+		for(i=0;i<matsize;i++)								//R2=R2-R0*A[2][0]		,,
+		{
+			temp=A->me[i][k];									//R1=R1/A[1][1]
+			for(j=0;j<matsize;j++)							//R0=R0-R1*A[0][1]
+			{												//R2=R2-R1*A[2][1]
+				if(i==k)
+					break;									//R2=R2/A[2][2]
+				A->me[i][j]-=A->me[k][j]*temp;						//R0=R0-R2*A[0][2]
+				out->me[i][j]-=out->me[k][j]*temp;						//R1=R1-R2*A[1][2]
+			}
+		}
 	}
-	out->me = A->me;
-	for (i = 1; i <= n; i++)
-        for (j = 1; j <= 2 * n; j++)
-            if (j == (i + n))
-                out->me[i][j] = 1.0;
- 
-    /************** partial pivoting **************/
-    for (i = n; i > 1; i--)
-    {
-        if (out->me[i - 1][1] < out->me[i][1])
-            for (j = 1; j <= n * 2; j++)
-            {
-                d = out->me[i][j];
-                out->me[i][j] = out->me[i - 1][j];
-                out->me[i - 1][j] = d;
-            }
-    }
-    /********** reducing to diagonal  matrix ***********/
- 
-    for (i = 1; i <= n; i++)
-    {
-        for (j = 1; j <= n * 2; j++)
-            if (j != i)
-            {
-                d = out->me[j][i] / out->me[i][i];
-                for (k = 1; k <= n * 2; k++)
-                    out->me[j][k] -= out->me[i][k] * d;
-            }
-    }
-    /************** reducing to unit matrix *************/
-    for (i = 1; i <= n; i++)
-    {
-        d = out->me[i][i];
-        for (j = 1; j <= n * 2; j++)
-            out->me[i][j] = out->me[i][j] / d;
-    }
+/*---------------LoGiC ends here--------------------*/
 
 	return out;
 }
