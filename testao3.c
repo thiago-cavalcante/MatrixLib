@@ -1224,8 +1224,11 @@ void main(){
     A4 = m_mlt(A, A, A4);
     m_output(A4);
 	A5=m_get(5,5);
+	printf("hereweare!\n");
     A5 = m_inverse(A,A5);
+	printf("hereweare2!\n");
     m_output(A5);
+	printf("hereweare3!\n");
 //    printf("testing /n");
     //setting up B matrix
 //    B=m_get(4,1);
