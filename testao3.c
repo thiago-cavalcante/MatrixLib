@@ -10,13 +10,6 @@
 #define	MNULL	((MAT *)NULL)
 #define	PNULL	((PERM *)NULL)
 
-#ifndef _HUGE_ENUF
-    #define _HUGE_ENUF  1e+300  // _HUGE_ENUF*_HUGE_ENUF must overflow
-#endif
-
-#define INFINITY   ((float)(_HUGE_ENUF * _HUGE_ENUF))
-#define HUGE_VAL   ((double)INFINITY)
-
 /* macros that also check types and sets pointers to NULL */
 #define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
 #define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
