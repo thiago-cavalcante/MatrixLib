@@ -725,13 +725,13 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 
 void main(){
 	printf("testing \n");
-    MAT *A = MNULL, *A2 = MNULL, *A3 = MNULL, *A4 = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
+    MAT *A = MNULL, *A2 = MNULL, *A3 = MNULL, *A4 = MNULL, *A5 = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
     MAT *Q1_temp, *Test = MNULL;
     //VEC *evals_re = VNULL, *evals_im = VNULL;
     MAT *F = MNULL, *G = MNULL, *H = MNULL;
     int k=3;
     double y, x0;
-    complex double *z;
+    //complex double *z;
     //ZMAT *ZQ = ZMNULL, *ZQ_temp, *ZQ_inv = ZMNULL, *ZH, *ZF;
 
    //setting up A matrix
@@ -758,6 +758,9 @@ void main(){
     A4=m_get(5,5);
     A4 = m_mlt(A, A, A4);
     m_output(A4);
+	A5=m_get(5,5);
+    A5 = m_inverse(A,A5);
+    m_output(A5);
 //    printf("testing /n");
     //setting up B matrix
 //    B=m_get(4,1);
