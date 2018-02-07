@@ -1072,6 +1072,65 @@ VEC	*LUsolve(const MAT *LU, PERM *pivot, const VEC *b, VEC *x)
 	return (x);
 }
 
+// /* m_inverse -- returns inverse of A, provided A is not too rank deficient
+// 	-- uses LU factorisation */
+// #ifndef ANSI_C
+// MAT	*m_inverse(A,out)
+// MAT	*A, *out;
+// #else
+// MAT	*m_inverse(const MAT *A, MAT *out)
+// #endif
+// {
+// 	printf("here!\n");
+// 	int	i;
+// 	static VEC	*tmp = VNULL, *tmp2 = VNULL;
+// 	static MAT	*A_cp = MNULL;
+// 	static PERM	*pivot = PNULL;
+
+// 	if ( ! out || out->m < A->m || out->n < A->n )
+// 	{
+// 	    out = m_resize(out,A->m,A->n);
+// 		printf("hereT!\n");
+// 	}
+// 	A_cp = m_resize(A_cp,A->m,A->n);
+// 	printf("here2!\n");
+// 	A_cp = m_copy(A,A_cp);
+// 	printf("here3!\n");
+// 	tmp = v_resize(tmp,A->m);
+// 	printf("here4!\n");
+// 	tmp2 = v_resize(tmp2,A->m);
+// 	printf("here5!\n");
+// 	pivot = px_resize(pivot,A->m);
+// 	printf("here6!\n");
+// 	MEM_STAT_REG(A_cp,TYPE_MAT);
+// 	printf("here7!\n");
+// 	MEM_STAT_REG(tmp, TYPE_VEC);
+// 	printf("here8!\n");
+// 	MEM_STAT_REG(tmp2,TYPE_VEC);
+// 	printf("here9!\n");
+// 	MEM_STAT_REG(pivot,TYPE_PERM);
+// 	printf("here10!\n");
+// 	LUfactor(A_cp,pivot);
+// 	printf("here11!\n");
+// 	for ( i = 0; i < A->n; i++ )
+// 	{
+// 	    v_zero(tmp);
+// 	    tmp->ve[i] = 1.0;
+// 		LUsolve(A_cp,pivot,tmp,tmp2);
+// 		printf("temp2=%f!\n",tmp->ve[i]);
+// 		printf("here12!\n");
+// 	    set_col(out,i,tmp2);
+// 		printf("here13!\n");
+// 	}
+
+// #ifdef	THREADSAFE
+// 	V_FREE(tmp);	V_FREE(tmp2);
+// 	M_FREE(A_cp);	PX_FREE(pivot);
+// #endif
+// printf("here14!\n");
+// 	return out;
+// }
+
 /* m_inverse -- returns inverse of A, provided A is not too rank deficient
 	-- uses LU factorisation */
 #ifndef ANSI_C
@@ -1081,53 +1140,50 @@ MAT	*A, *out;
 MAT	*m_inverse(const MAT *A, MAT *out)
 #endif
 {
-	printf("here!\n");
-	int	i;
-	static VEC	*tmp = VNULL, *tmp2 = VNULL;
-	static MAT	*A_cp = MNULL;
-	static PERM	*pivot = PNULL;
+	int i, j, k, n;
+	double d;
 
 	if ( ! out || out->m < A->m || out->n < A->n )
 	{
 	    out = m_resize(out,A->m,A->n);
-		printf("hereT!\n");
 	}
-	A_cp = m_resize(A_cp,A->m,A->n);
-	printf("here2!\n");
-	A_cp = m_copy(A,A_cp);
-	printf("here3!\n");
-	tmp = v_resize(tmp,A->m);
-	printf("here4!\n");
-	tmp2 = v_resize(tmp2,A->m);
-	printf("here5!\n");
-	pivot = px_resize(pivot,A->m);
-	printf("here6!\n");
-	MEM_STAT_REG(A_cp,TYPE_MAT);
-	printf("here7!\n");
-	MEM_STAT_REG(tmp, TYPE_VEC);
-	printf("here8!\n");
-	MEM_STAT_REG(tmp2,TYPE_VEC);
-	printf("here9!\n");
-	MEM_STAT_REG(pivot,TYPE_PERM);
-	printf("here10!\n");
-	LUfactor(A_cp,pivot);
-	printf("here11!\n");
-	for ( i = 0; i < A->n; i++ )
-	{
-	    v_zero(tmp);
-	    tmp->ve[i] = 1.0;
-		LUsolve(A_cp,pivot,tmp,tmp2);
-		printf("temp2=%f!\n",tmp->ve[i]);
-		printf("here12!\n");
-	    set_col(out,i,tmp2);
-		printf("here13!\n");
-	}
+	out->me = A->me;
+	for (i = 1; i <= n; i++)
+        for (j = 1; j <= 2 * n; j++)
+            if (j == (i + n))
+                out->me[i][j] = 1.0;
+ 
+    /************** partial pivoting **************/
+    for (i = n; i > 1; i--)
+    {
+        if (out->me[i - 1][1] < out->me[i][1])
+            for (j = 1; j <= n * 2; j++)
+            {
+                d = out->me[i][j];
+                out->me[i][j] = out->me[i - 1][j];
+                out->me[i - 1][j] = d;
+            }
+    }
+    /********** reducing to diagonal  matrix ***********/
+ 
+    for (i = 1; i <= n; i++)
+    {
+        for (j = 1; j <= n * 2; j++)
+            if (j != i)
+            {
+                d = out->me[j][i] / out->me[i][i];
+                for (k = 1; k <= n * 2; k++)
+                    out->me[j][k] -= out->me[i][k] * d;
+            }
+    }
+    /************** reducing to unit matrix *************/
+    for (i = 1; i <= n; i++)
+    {
+        d = out->me[i][i];
+        for (j = 1; j <= n * 2; j++)
+            out->me[i][j] = out->me[i][j] / d;
+    }
 
-#ifdef	THREADSAFE
-	V_FREE(tmp);	V_FREE(tmp2);
-	M_FREE(A_cp);	PX_FREE(pivot);
-#endif
-printf("here14!\n");
 	return out;
 }
 
