@@ -584,47 +584,6 @@ MAT	*set_col(MAT *mat, unsigned int col, const VEC *vec/*, unsigned int i0*/)
    return (mat);
 }
 
-/* m_inverse -- returns inverse of A, provided A is not too rank deficient
-	-- uses LU factorisation */
-#ifndef ANSI_C
-MAT	*m_inverse(A,out)
-MAT	*A, *out;
-#else
-MAT	*m_inverse(const MAT *A, MAT *out)
-#endif
-{
-	int	i;
-	static VEC	*tmp = VNULL, *tmp2 = VNULL;
-	static MAT	*A_cp = MNULL;
-	static PERM	*pivot = PNULL;
-
-	if ( ! out || out->m < A->m || out->n < A->n )
-	    out = m_resize(out,A->m,A->n);
-
-	A_cp = m_resize(A_cp,A->m,A->n);
-	A_cp = m_copy(A,A_cp);
-	tmp = v_resize(tmp,A->m);
-	tmp2 = v_resize(tmp2,A->m);
-	pivot = px_resize(pivot,A->m);
-	MEM_STAT_REG(A_cp,TYPE_MAT);
-	MEM_STAT_REG(tmp, TYPE_VEC);
-	MEM_STAT_REG(tmp2,TYPE_VEC);
-	MEM_STAT_REG(pivot,TYPE_PERM);
-	for ( i = 0; i < A->n; i++ )
-	{
-	    v_zero(tmp);
-	    tmp->ve[i] = 1.0;
-	    set_col(out,i,tmp2);
-	}
-
-#ifdef	THREADSAFE
-	V_FREE(tmp);	V_FREE(tmp2);
-	M_FREE(A_cp);	PX_FREE(pivot);
-#endif
-
-	return out;
-}
-
 /* m_free -- returns MAT & asoociated memory back to memory heap */
 #ifndef ANSI_C
 int	m_free(mat)
@@ -721,6 +680,48 @@ int	v_free(VEC *vec)
    
    return (0);
 }
+
+/* m_inverse -- returns inverse of A, provided A is not too rank deficient
+	-- uses LU factorisation */
+#ifndef ANSI_C
+MAT	*m_inverse(A,out)
+MAT	*A, *out;
+#else
+MAT	*m_inverse(const MAT *A, MAT *out)
+#endif
+{
+	int	i;
+	static VEC	*tmp = VNULL, *tmp2 = VNULL;
+	static MAT	*A_cp = MNULL;
+	static PERM	*pivot = PNULL;
+
+	if ( ! out || out->m < A->m || out->n < A->n )
+	    out = m_resize(out,A->m,A->n);
+
+	A_cp = m_resize(A_cp,A->m,A->n);
+	A_cp = m_copy(A,A_cp);
+	tmp = v_resize(tmp,A->m);
+	tmp2 = v_resize(tmp2,A->m);
+	pivot = px_resize(pivot,A->m);
+	MEM_STAT_REG(A_cp,TYPE_MAT);
+	MEM_STAT_REG(tmp, TYPE_VEC);
+	MEM_STAT_REG(tmp2,TYPE_VEC);
+	MEM_STAT_REG(pivot,TYPE_PERM);
+	for ( i = 0; i < A->n; i++ )
+	{
+	    v_zero(tmp);
+	    tmp->ve[i] = 1.0;
+	    set_col(out,i,tmp2);
+	}
+
+#ifdef	THREADSAFE
+	V_FREE(tmp);	V_FREE(tmp2);
+	M_FREE(A_cp);	PX_FREE(pivot);
+#endif
+
+	return out;
+}
+
 
 void main(){
 	printf("testing \n");
