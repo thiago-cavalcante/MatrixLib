@@ -10,6 +10,14 @@
 #define	MNULL	((MAT *)NULL)
 #define	PNULL	((PERM *)NULL)
 
+/* available standard types */
+#define TYPE_NULL              (-1)
+#define TYPE_MAT    	        0
+#define TYPE_BAND               1
+#define TYPE_PERM		2
+#define TYPE_VEC		3
+#define TYPE_IVEC		4
+
 #define	m_output(mat)	m_foutput(stdout,mat)
 
 static const char    *format = "%14.9g ";
@@ -22,6 +30,10 @@ static const char    *format = "%14.9g ";
 #endif
 
 #define SEGMENTED
+
+#ifndef THREADSAFE	/* for use as a shared library */
+#define	THREADSAFE 1
+#endif
 
 #define TYPE_MAT mem_bytes(0,0,sizeof(MAT))
 #define MEM_CONNECT_MAX_LISTS 3
@@ -53,6 +65,15 @@ static const char    *format = "%14.9g ";
 #define	min(a,b)	((a) > (b) ? (b) : (a))
 #endif /* min */
 
+#ifndef THREADSAFE
+#define mem_stat_reg(var,type)  mem_stat_reg_list((void **)var,type,0,__FILE__,__LINE__)
+#define MEM_STAT_REG(var,type)  mem_stat_reg_list((void **)&(var),type,0,__FILE__,__LINE__)
+#define mem_stat_free(mark)   mem_stat_free_list(mark,0)
+#else
+#define mem_stat_reg(var,type)
+#define MEM_STAT_REG(var,type)
+#define mem_stat_free(mark)
+#endif
 
 /* matrix definition */
 typedef	struct	{
@@ -61,6 +82,16 @@ typedef	struct	{
 		double	**me,*base;	/* base is base of alloc'd mem */
 } MAT;
 
+/* vector definition */
+typedef	struct	{
+		unsigned int	dim, max_dim;
+		double	*ve;
+} VEC;
+
+/* permutation definition */
+typedef	struct	{
+		unsigned int	size, max_size, *pe;
+} PERM;
 
 /* m_add -- matrix addition -- may be in-situ */
 #ifndef ANSI_C
@@ -353,6 +384,74 @@ void    m_foutput(FILE *fp, const MAT *a)
 	  }
 	  if ( tmp % 5 != 1 )   putc('\n',fp);
      }
+}
+
+/* m_copy -- copies matrix into new area
+	-- out(i0:m,j0:n) <- in(i0:m,j0:n) */
+#ifndef ANSI_C
+MAT	*m_copy(in,out,i0,j0)
+MAT	*in,*out;
+unsigned int	i0,j0;
+#else
+MAT	*m_copy(const MAT *in, MAT *out)
+#endif
+{
+	unsigned int i0 = 0, j0 = 0;
+	unsigned int	i /* ,j */;
+
+	if ( in==out )
+		return (out);
+	if ( out==MNULL || out->m < in->m || out->n < in->n )
+		out = m_resize(out,in->m,in->n);
+
+	for ( i=i0; i < in->m; i++ )
+		MEM_COPY(&(in->me[i][j0]),&(out->me[i][j0]),
+				(in->n - j0)*sizeof(double));
+		/* for ( j=j0; j < in->n; j++ )
+			out->me[i][j] = in->me[i][j]; */
+
+	return (out);
+}
+
+/* m_inverse -- returns inverse of A, provided A is not too rank deficient
+	-- uses LU factorisation */
+#ifndef ANSI_C
+MAT	*m_inverse(A,out)
+MAT	*A, *out;
+#else
+MAT	*m_inverse(const MAT *A, MAT *out)
+#endif
+{
+	int	i;
+	static VEC	*tmp = VNULL, *tmp2 = VNULL;
+	static MAT	*A_cp = MNULL;
+	static PERM	*pivot = PNULL;
+
+	if ( ! out || out->m < A->m || out->n < A->n )
+	    out = m_resize(out,A->m,A->n);
+
+	A_cp = m_resize(A_cp,A->m,A->n);
+	A_cp = m_copy(A,A_cp);
+	tmp = v_resize(tmp,A->m);
+	tmp2 = v_resize(tmp2,A->m);
+	pivot = px_resize(pivot,A->m);
+	MEM_STAT_REG(A_cp,TYPE_MAT);
+	MEM_STAT_REG(tmp, TYPE_VEC);
+	MEM_STAT_REG(tmp2,TYPE_VEC);
+	MEM_STAT_REG(pivot,TYPE_PERM);
+	for ( i = 0; i < A->n; i++ )
+	{
+	    v_zero(tmp);
+	    tmp->ve[i] = 1.0;
+	    set_col(out,i,tmp2);
+	}
+
+#ifdef	THREADSAFE
+	V_FREE(tmp);	V_FREE(tmp2);
+	M_FREE(A_cp);	PX_FREE(pivot);
+#endif
+
+	return out;
 }
 
 void main(){
