@@ -1142,7 +1142,7 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 {
 	int i, j, k, n;
 	double d;
-
+    n = A->m;
 	if ( ! out || out->m < A->m || out->n < A->n )
 	{
 	    out = m_resize(out,A->m,A->n);
