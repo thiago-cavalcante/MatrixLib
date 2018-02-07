@@ -10,6 +10,13 @@
 #define	MNULL	((MAT *)NULL)
 #define	PNULL	((PERM *)NULL)
 
+#ifndef _HUGE_ENUF
+    #define _HUGE_ENUF  1e+300  // _HUGE_ENUF*_HUGE_ENUF must overflow
+#endif
+
+#define INFINITY   ((float)(_HUGE_ENUF * _HUGE_ENUF))
+#define HUGE_VAL   ((double)INFINITY)
+
 /* macros that also check types and sets pointers to NULL */
 #define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
 #define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
@@ -681,6 +688,397 @@ int	v_free(VEC *vec)
    return (0);
 }
 
+/* _v_copy -- copies vector into new area
+	-- out(i0:dim) <- in(i0:dim) */
+#ifndef ANSI_C
+VEC	*v_copy(in,out)
+VEC	*in,*out;
+#else
+VEC	*v_copy(const VEC *in, VEC *out/*, unsigned int i0*/)
+#endif
+{
+	/* unsigned int	i,j; */
+	unsigned int i0 = 0;
+
+	if ( in==out )
+		return (out);
+	if ( out==VNULL || out->dim < in->dim )
+		out = v_resize(out,in->dim);
+
+	MEM_COPY(&(in->ve[i0]),&(out->ve[i0]),(in->dim - i0)*sizeof(double));
+	/* for ( i=i0; i < in->dim; i++ )
+		out->ve[i] = in->ve[i]; */
+
+	return (out);
+}
+
+/* px_vec -- permute vector */
+#ifndef ANSI_C
+VEC	*px_vec(px,vector,out)
+PERM	*px;
+VEC	*vector,*out;
+#else
+VEC	*px_vec(PERM *px, const VEC *vector, VEC *out)
+#endif
+{
+    unsigned int	old_i, i, size, start;
+    double	tmp;
+    
+    // if ( px==PNULL || vector==VNULL )
+	// error(E_NULL,"px_vec");
+    // if ( px->size > vector->dim )
+	// error(E_SIZES,"px_vec");
+    if ( out==VNULL || out->dim < vector->dim )
+	out = v_resize(out,vector->dim);
+    
+    size = px->size;
+    if ( size == 0 )
+	return v_copy(vector,out);
+    if ( out != vector )
+    {
+	for ( i=0; i<size; i++ )
+	    // if ( px->pe[i] >= size )
+		// error(E_BOUNDS,"px_vec");
+	    // else
+		out->ve[i] = vector->ve[px->pe[i]];
+    }
+    else
+    {	/* in situ algorithm */
+	start = 0;
+	while ( start < size )
+	{
+	    old_i = start;
+	    i = px->pe[old_i];
+	    if ( i >= size )
+	    {
+		start++;
+		continue;
+	    }
+	    tmp = vector->ve[start];
+	    while ( 1 )
+	    {
+		vector->ve[old_i] = vector->ve[i];
+		px->pe[old_i] = i+size;
+		old_i = i;
+		i = px->pe[old_i];
+		if ( i >= size )
+		    break;
+		if ( i == start )
+		{
+		    vector->ve[old_i] = tmp;
+		    px->pe[old_i] = i+size;
+		    break;
+		}
+	    }
+	    start++;
+	}
+
+	for ( i = 0; i < size; i++ )
+		px->pe[i] = px->pe[i]-size;
+    }
+    
+    return out;
+}
+
+/* __ip__ -- inner product */
+#ifndef ANSI_C
+double	__ip__(dp1,dp2,len)
+register double	*dp1, *dp2;
+int	len;
+#else
+double	__ip__(const double *dp1, const double *dp2, int len)
+#endif
+{
+#ifdef VUNROLL
+    register int	len4;
+    register double	sum1, sum2, sum3;
+#endif
+    register int	i;
+    register double     sum;
+
+    sum = 0.0;
+#ifdef VUNROLL
+    sum1 = sum2 = sum3 = 0.0;
+    
+    len4 = len / 4;
+    len  = len % 4;
+    
+    for ( i = 0; i < len4; i++ )
+    {
+	sum  += dp1[4*i]*dp2[4*i];
+	sum1 += dp1[4*i+1]*dp2[4*i+1];
+	sum2 += dp1[4*i+2]*dp2[4*i+2];
+	sum3 += dp1[4*i+3]*dp2[4*i+3];
+    }
+    sum  += sum1 + sum2 + sum3;
+    dp1 += 4*len4;	dp2 += 4*len4;
+#endif
+    
+    for ( i = 0; i < len; i++ )
+	sum  += dp1[i]*dp2[i];
+    
+    return sum;
+}
+
+/* px_transp -- transpose elements of permutation
+		-- Really multiplying a permutation by a transposition */
+#ifndef ANSI_C
+PERM	*px_transp(px,i1,i2)
+PERM	*px;		/* permutation to transpose */
+unsigned int	i1,i2;		/* elements to transpose */
+#else
+PERM	*px_transp(PERM *px, unsigned int i1, unsigned int i2)
+#endif
+{
+	unsigned int	temp;
+
+	if ( px==(PERM *)NULL )
+		printf("PERM is NULL!\n");
+
+	if ( i1 < px->size && i2 < px->size )
+	{
+		temp = px->pe[i1];
+		px->pe[i1] = px->pe[i2];
+		px->pe[i2] = temp;
+	}
+
+	return px;
+}
+
+/* LUfactor -- gaussian elimination with scaled partial pivoting
+		-- Note: returns LU matrix which is A */
+#ifndef ANSI_C
+MAT	*LUfactor(A,pivot)
+MAT	*A;
+PERM	*pivot;
+#else
+MAT	*LUfactor(MAT *A, PERM *pivot)
+#endif
+{
+	unsigned int	i, j, m, n;
+	int	i_max, k, k_max;
+	double	**A_v, *A_piv, *A_row;
+	double	max1, temp, tiny;
+	static	VEC	*scale = VNULL;
+
+	// if ( A==(MAT *)NULL || pivot==(PERM *)NULL )
+	// 	error(E_NULL,"LUfactor");
+	// if ( pivot->size != A->m )
+	// 	error(E_SIZES,"LUfactor");
+	m = A->m;	n = A->n;
+	scale = v_resize(scale,A->m);
+	MEM_STAT_REG(scale,TYPE_VEC);
+	A_v = A->me;
+
+	tiny = 10.0/HUGE_VAL;
+
+	/* initialise pivot with identity permutation */
+	for ( i=0; i<m; i++ )
+		pivot->pe[i] = i;
+
+	/* set scale parameters */
+	for ( i=0; i<m; i++ )
+	{
+		max1 = 0.0;
+		for ( j=0; j<n; j++ )
+		{
+			temp = fabs(A_v[i][j]);
+			max1 = max(max1,temp);
+		}
+		scale->ve[i] = max1;
+	}
+
+	/* main loop */
+	k_max = min(m,n)-1;
+	for ( k=0; k<k_max; k++ )
+	{
+	    /* find best pivot row */
+	    max1 = 0.0;	i_max = -1;
+	    for ( i=k; i<m; i++ )
+		if ( fabs(scale->ve[i]) >= tiny*fabs(A_v[i][k]) )
+		{
+		    temp = fabs(A_v[i][k])/scale->ve[i];
+		    if ( temp > max1 )
+		    { max1 = temp;	i_max = i;	}
+		}
+	    
+	    /* if no pivot then ignore column k... */
+	    if ( i_max == -1 )
+	    {
+		/* set pivot entry A[k][k] exactly to zero,
+		   rather than just "small" */
+		A_v[k][k] = 0.0;
+		continue;
+	    }
+	    
+	    /* do we pivot ? */
+	    if ( i_max != k )	/* yes we do... */
+	    {
+		px_transp(pivot,i_max,k);
+		for ( j=0; j<n; j++ )
+		{
+		    temp = A_v[i_max][j];
+		    A_v[i_max][j] = A_v[k][j];
+		    A_v[k][j] = temp;
+		}
+	    }
+	    
+	    /* row operations */
+	    for ( i=k+1; i<m; i++ )	/* for each row do... */
+	    {	/* Note: divide by zero should never happen */
+		temp = A_v[i][k] = A_v[i][k]/A_v[k][k];
+		A_piv = &(A_v[k][k+1]);
+		A_row = &(A_v[i][k+1]);
+		if ( k+1 < n )
+		    __mltadd__(A_row,A_piv,-temp,(int)(n-(k+1)));
+		/*********************************************
+		  for ( j=k+1; j<n; j++ )
+		  A_v[i][j] -= temp*A_v[k][j];
+		  (*A_row++) -= temp*(*A_piv++);
+		  *********************************************/
+	    }
+	    
+	}
+
+#ifdef	THREADSAFE
+	V_FREE(scale);
+#endif
+
+	return A;
+}
+
+/* Usolve -- back substitution with optional over-riding diagonal
+		-- can be in-situ but doesn't need to be */
+#ifndef ANSI_C
+VEC	*Usolve(matrix,b,out,diag)
+MAT	*matrix;
+VEC	*b, *out;
+double	diag;
+#else
+VEC	*Usolve(const MAT *matrix, const VEC *b, VEC *out, double diag)
+#endif
+{
+	unsigned int	dim /* , j */;
+	int	i, i_lim;
+	double	**mat_ent, *mat_row, *b_ent, *out_ent, *out_col, sum, tiny;
+
+	// if ( matrix==MNULL || b==VNULL )
+	// 	error(E_NULL,"Usolve");
+	// dim = min(matrix->m,matrix->n);
+	// if ( b->dim < dim )
+	// 	error(E_SIZES,"Usolve");
+	if ( out==VNULL || out->dim < dim )
+		out = v_resize(out,matrix->n);
+	mat_ent = matrix->me;	b_ent = b->ve;	out_ent = out->ve;
+
+	tiny = 10.0/HUGE_VAL;
+
+	for ( i=dim-1; i>=0; i-- )
+		if ( b_ent[i] != 0.0 )
+		    break;
+		else
+		    out_ent[i] = 0.0;
+	i_lim = i;
+
+	for (    ; i>=0; i-- )
+	{
+		sum = b_ent[i];
+		mat_row = &(mat_ent[i][i+1]);
+		out_col = &(out_ent[i+1]);
+		sum -= __ip__(mat_row,out_col,i_lim-i);
+		/******************************************************
+		for ( j=i+1; j<=i_lim; j++ )
+			sum -= mat_ent[i][j]*out_ent[j];
+			sum -= (*mat_row++)*(*out_col++);
+		******************************************************/
+		if ( diag==0.0 )
+		{
+			if ( fabs(mat_ent[i][i]) <= tiny*fabs(sum) )
+				printf("Element too small!\n");
+			else
+				out_ent[i] = sum/mat_ent[i][i];
+		}
+		else
+			out_ent[i] = sum/diag;
+	}
+
+	return (out);
+}
+
+/* Lsolve -- forward elimination with (optional) default diagonal value */
+#ifndef ANSI_C
+VEC	*Lsolve(matrix,b,out,diag)
+MAT	*matrix;
+VEC	*b,*out;
+double	diag;
+#else
+VEC	*Lsolve(const MAT *matrix, const VEC *b, VEC *out, double diag)
+#endif
+{
+	unsigned int	dim, i, i_lim /* , j */;
+	double	**mat_ent, *mat_row, *b_ent, *out_ent, *out_col, sum, tiny;
+
+	// if ( matrix==(MAT *)NULL || b==(VEC *)NULL )
+	// 	error(E_NULL,"Lsolve");
+	// dim = min(matrix->m,matrix->n);
+	// if ( b->dim < dim )
+	// 	error(E_SIZES,"Lsolve");
+	if ( out==(VEC *)NULL || out->dim < dim )
+		out = v_resize(out,matrix->n);
+	mat_ent = matrix->me;	b_ent = b->ve;	out_ent = out->ve;
+
+	for ( i=0; i<dim; i++ )
+		if ( b_ent[i] != 0.0 )
+		    break;
+		else
+		    out_ent[i] = 0.0;
+	i_lim = i;
+
+	tiny = 10.0/HUGE_VAL;
+
+	for (    ; i<dim; i++ )
+	{
+		sum = b_ent[i];
+		mat_row = &(mat_ent[i][i_lim]);
+		out_col = &(out_ent[i_lim]);
+		sum -= __ip__(mat_row,out_col,(int)(i-i_lim));
+		/*****************************************************
+		for ( j=i_lim; j<i; j++ )
+			sum -= mat_ent[i][j]*out_ent[j];
+			sum -= (*mat_row++)*(*out_col++);
+		******************************************************/
+		if ( diag==0.0 )
+		{
+			if ( fabs(mat_ent[i][i]) <= tiny*fabs(sum) )
+				printf("Element too small!\n");
+			else
+				out_ent[i] = sum/mat_ent[i][i];
+		}
+		else
+			out_ent[i] = sum/diag;
+	}
+
+	return (out);
+}
+
+/* LUsolve -- given an LU factorisation in A, solve Ax=b */
+#ifndef ANSI_C
+VEC	*LUsolve(LU,pivot,b,x)
+MAT	*LU;
+PERM	*pivot;
+VEC	*b,*x;
+#else
+VEC	*LUsolve(const MAT *LU, PERM *pivot, const VEC *b, VEC *x)
+#endif
+{
+    x = v_resize(x,b->dim);
+	px_vec(pivot,b,x);	/* x := P.b */
+	Lsolve(LU,x,x,1.0);	/* implicit diagonal = 1 */
+	Usolve(LU,x,x,0.0);	/* explicit diagonal */
+
+	return (x);
+}
+
 /* m_inverse -- returns inverse of A, provided A is not too rank deficient
 	-- uses LU factorisation */
 #ifndef ANSI_C
@@ -707,10 +1105,12 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 	MEM_STAT_REG(tmp, TYPE_VEC);
 	MEM_STAT_REG(tmp2,TYPE_VEC);
 	MEM_STAT_REG(pivot,TYPE_PERM);
+	LUfactor(A_cp,pivot);
 	for ( i = 0; i < A->n; i++ )
 	{
 	    v_zero(tmp);
 	    tmp->ve[i] = 1.0;
+		LUsolve(A_cp,pivot,tmp,tmp2);
 	    set_col(out,i,tmp2);
 	}
 
