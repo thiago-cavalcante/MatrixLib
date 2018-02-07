@@ -1088,8 +1088,10 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 	static PERM	*pivot = PNULL;
 
 	if ( ! out || out->m < A->m || out->n < A->n )
+	{
 	    out = m_resize(out,A->m,A->n);
-
+		printf("hereT!\n");
+	}
 	A_cp = m_resize(A_cp,A->m,A->n);
 	printf("here2!\n");
 	A_cp = m_copy(A,A_cp);
@@ -1115,6 +1117,7 @@ MAT	*m_inverse(const MAT *A, MAT *out)
 	    v_zero(tmp);
 	    tmp->ve[i] = 1.0;
 		LUsolve(A_cp,pivot,tmp,tmp2);
+		printf("temp2=%f!\n",tmp->ve[i]);
 		printf("here12!\n");
 	    set_col(out,i,tmp2);
 		printf("here13!\n");
