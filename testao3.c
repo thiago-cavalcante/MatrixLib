@@ -12,10 +12,10 @@
 
 /* available standard types */
 #define TYPE_NULL              (-1)
-#define TYPE_MAT    	        0
+//#define TYPE_MAT    	        0
 #define TYPE_BAND               1
-#define TYPE_PERM		2
-#define TYPE_VEC		3
+//#define TYPE_PERM		2
+//#define TYPE_VEC		3
 #define TYPE_IVEC		4
 
 #define	m_output(mat)	m_foutput(stdout,mat)
@@ -36,6 +36,8 @@ static const char    *format = "%14.9g ";
 #endif
 
 #define TYPE_MAT mem_bytes(0,0,sizeof(MAT))
+#define TYPE_VEC mem_bytes(0,0,sizeof(VEC))
+#define TYPE_PERM mem_bytes(0,0,sizeof(PERM))
 #define MEM_CONNECT_MAX_LISTS 3
 
 /* standard copy & zero functions */
@@ -389,9 +391,9 @@ void    m_foutput(FILE *fp, const MAT *a)
 /* m_copy -- copies matrix into new area
 	-- out(i0:m,j0:n) <- in(i0:m,j0:n) */
 #ifndef ANSI_C
-MAT	*m_copy(in,out,i0,j0)
+MAT	*m_copy(in,out/*,i0,j0*/)
 MAT	*in,*out;
-unsigned int	i0,j0;
+// unsigned int	i0,j0;
 #else
 MAT	*m_copy(const MAT *in, MAT *out)
 #endif
@@ -411,6 +413,172 @@ MAT	*m_copy(const MAT *in, MAT *out)
 			out->me[i][j] = in->me[i][j]; */
 
 	return (out);
+}
+
+/* v_zero -- zero the vector x */
+#ifndef ANSI_C
+VEC	*v_zero(x)
+VEC	*x;
+#else
+VEC	*v_zero(VEC *x)
+#endif
+{
+
+	// __zero__(x->ve,x->dim);
+	for (int i = 0; i < x->dim; i++ )
+		x->ve[i] = 0.0; 
+
+	return x;
+}
+
+/* v_get -- gets a VEC of dimension 'size'
+   -- Note: initialized to zero */
+#ifndef ANSI_C
+VEC	*v_get(size)
+int	size;
+#else
+VEC	*v_get(int size)
+#endif
+{
+   VEC	*vector = malloc(sizeof *vector);
+   int	i,j;
+
+   vector->dim = vector->max_dim = size;
+   if (size < 0)
+        printf("The vector dimension must be positive!\n");
+   if ((vector->ve=NEW_A(size,double)) == (double *)NULL )
+   {
+      free(vector);
+   }
+   else 
+   {
+	  vector->ve = (double *)malloc(size * sizeof(double));
+   }
+   
+   return (vector);
+}
+
+/* v_resize -- returns the vector x with dim new_dim
+   -- x is set to the zero vector */
+#ifndef ANSI_C
+VEC	*v_resize(x,new_dim)
+VEC	*x;
+int	new_dim;
+#else
+VEC	*v_resize(VEC *x, int new_dim)
+#endif
+{
+   int *ptr;
+   if ( ! x )
+     return v_get(new_dim);
+
+   /* nothing is changed */
+   if (new_dim == x->dim)
+     return x;
+
+   if ( x->max_dim == 0 )	/* assume that it's from sub_vec */
+     return v_get(new_dim);
+   ptr = x->ve;
+   if ( new_dim > x->max_dim )
+   {
+     ptr = realloc( ptr, new_dim * sizeof *ptr );
+   }
+   if ( new_dim > x->dim )
+   {
+     for (int i = 1; i < (new_dim - x->dim); i++ )
+		x->ve[new_dim-i] = 0.0;
+   }
+   else if( new_dim < x->dim )
+   {
+	 int del_rows = x->dim - new_dim;
+     for ( int i = 1; i <= del_rows; i++ )
+	     free( ptr[x->dim-i] );
+   }
+
+   x->dim = new_dim;
+   
+   return x;
+}
+
+/* px_get -- gets a PERM of given 'size' by dynamic memory allocation
+	-- Note: initialized to the identity permutation
+	-- the permutation is on the set {0,1,2,...,size-1} */
+#ifndef ANSI_C
+PERM	*px_get(size)
+int	size;
+#else
+PERM	*px_get(int size)
+#endif
+{
+   PERM	*permute = malloc(sizeof *permute);
+   int	i;
+   
+   permute->size = permute->max_size = size;
+
+   permute->pe = (unsigned int *)malloc(size * sizeof(unsigned int));
+   for ( i=0; i<size; i++ )
+     permute->pe[i] = i;
+   
+   return (permute);
+}
+
+/* px_resize -- returns the permutation px with size new_size
+   -- px is set to the identity permutation */
+#ifndef ANSI_C
+PERM	*px_resize(px,new_size)
+PERM	*px;
+int	new_size;
+#else
+PERM	*px_resize(PERM *px, int new_size)
+#endif
+{
+   int	i;
+   unsigned int *ptr;
+
+   if ( ! px )
+     return px_get(new_size);
+   
+   /* nothing is changed */
+   if (new_size == px->size)
+     return px;
+   
+   ptr = px->pe;
+   if ( new_size > px->max_size )
+   {
+     ptr = realloc( ptr, new_size * sizeof *ptr );
+     px->max_size = new_size;
+   }
+   if ( px->size <= new_size )
+     /* extend permutation */
+     for ( i = px->size; i < new_size; i++ )
+       px->pe[i] = i;
+   else
+     for ( i = 0; i < new_size; i++ )
+       px->pe[i] = i;
+   
+   px->size = new_size;
+   
+   return px;
+}
+
+/* set_col -- sets column of matrix to values given in vec (in situ)
+	-- that is, mat(i0:lim,col) <- vec(i0:lim) */
+#ifndef ANSI_C
+MAT	*set_col(mat,col,vec)
+MAT	*mat;
+VEC	*vec;
+unsigned int	col;
+#else
+MAT	*set_col(MAT *mat, unsigned int col, const VEC *vec/*, unsigned int i0*/)
+#endif
+{
+   unsigned int	i,lim,i0;
+   
+   lim = min(mat->m,vec->dim);
+   for ( i=i0; i<lim; i++ )
+     mat->me[i][col] = vec->ve[i];
+   
+   return (mat);
 }
 
 /* m_inverse -- returns inverse of A, provided A is not too rank deficient
