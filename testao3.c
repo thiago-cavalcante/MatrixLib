@@ -10,10 +10,10 @@
 #define	MNULL	((MAT *)NULL)
 #define	PNULL	((PERM *)NULL)
 
-/* macros that also check types and sets pointers to NULL */
-#define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
-#define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
-#define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
+// /* macros that also check types and sets pointers to NULL */
+// #define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
+// #define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
+// #define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
 
 /* available standard types */
 #define TYPE_NULL              (-1)
@@ -473,7 +473,7 @@ int	new_dim;
 VEC	*v_resize(VEC *x, int new_dim)
 #endif
 {
-   int *ptr;
+   double *ptr;
    if ( ! x )
      return v_get(new_dim);
 
@@ -497,7 +497,7 @@ VEC	*v_resize(VEC *x, int new_dim)
    {
 	 int del_rows = x->dim - new_dim;
      for ( int i = 1; i <= del_rows; i++ )
-	     free( ptr[x->dim-i] );
+	     free( (double*)ptr[x->dim-i] );
    }
 
    x->dim = new_dim;
@@ -723,6 +723,11 @@ int	v_free(VEC *vec)
    
    return (0);
 }
+
+/* macros that also check types and sets pointers to NULL */
+#define	M_FREE(mat)	( m_free(mat),	(mat)=(MAT *)NULL )
+#define V_FREE(vec)	( v_free(vec),	(vec)=(VEC *)NULL )
+#define	PX_FREE(px)	( px_free(px),	(px)=(PERM *)NULL )
 
 void main(){
 	printf("testing \n");
