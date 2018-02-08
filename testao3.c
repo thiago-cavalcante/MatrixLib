@@ -23,6 +23,8 @@
 //#define TYPE_VEC		3
 #define TYPE_IVEC		4
 
+#define MACHEPS 2.22045e-16
+
 #define	m_output(mat)	m_foutput(stdout,mat)
 
 static const char    *format = "%14.9g ";
@@ -44,6 +46,26 @@ static const char    *format = "%14.9g ";
 #define TYPE_VEC mem_bytes(0,0,sizeof(VEC))
 #define TYPE_PERM mem_bytes(0,0,sizeof(PERM))
 #define MEM_CONNECT_MAX_LISTS 3
+
+#define	v_chk_idx(x,i)		((i)>=0 && (i)<(x)->dim)
+
+#define	v_get_val(x,i)	( v_chk_idx(x,i) ? (x)->ve[(i)] : \
+	(printf("Error!\n")))
+
+#define	v_entry(x,i)		v_get_val(x,i)
+
+#define	v_set_val(x,i,val)	(x->ve[i] = val)
+
+#define	m_set_val(A,i,j,val)	((A)->me[(i)][(j)] = (val))
+
+#define	m_add_val(A,i,j,val)	((A)->me[(i)][(j)] += (val))
+
+#define	m_chk_idx(A,i,j)	((i)>=0 && (i)<(A)->m && (j)>=0 && (j)<=(A)->n)
+
+#define	m_get_val(A,i,j)	( m_chk_idx(A,i,j) ? \
+	(A)->me[(i)][(j)] : (printf("Error!")))
+
+#define	m_entry(A,i,j)		m_get_val(A,i,j)
 
 /* standard copy & zero functions */
 #define	MEM_COPY(from,to,size)	memmove((to),(from),(size))
@@ -1214,7 +1236,7 @@ MAT	*_m_pow(const MAT *A, int p, MAT *tmp, MAT *out)
    tmp = m_resize(tmp,A->m,A->n);
    
    if ( p == 0 )
-     m_ident(out);
+     out = m_ident(out);
    else if ( p > 0 )
    {
       it_cnt = 1;
@@ -1244,6 +1266,7 @@ MAT	*_m_pow(const MAT *A, int p, MAT *tmp, MAT *out)
 #undef Z   
 }
 
+// TODO -> needs to be fixed
 /* m_pow -- computes integer powers of a square matrix A, A^p */
 #ifndef ANSI_C
 MAT	*m_pow(A, p, out)
@@ -1262,6 +1285,7 @@ MAT	*m_pow(const MAT *A, int p, MAT *out)
    {
        tmp = m_resize(tmp,A->m,A->n);
        MEM_STAT_REG(tmp,TYPE_MAT);
+	   tmp = m_inverse(A,tmp);
        out = _m_pow(tmp, -p, wkspace, out);
    }
    else
@@ -1273,6 +1297,832 @@ MAT	*m_pow(const MAT *A, int p, MAT *out)
 
    return out;
 }
+
+/* get_col -- gets a specified column of a matrix and retruns it as a vector */
+#ifndef ANSI_C
+VEC	*get_col(mat,col,vec)
+unsigned int	col;
+MAT	*mat;
+VEC	*vec;
+#else
+VEC	*get_col(const MAT *mat, unsigned int col, VEC *vec)
+#endif
+{
+   unsigned int	i;
+   
+   if ( vec==(VEC *)NULL || vec->dim<mat->m )
+     vec = v_resize(vec,mat->m);
+   
+   for ( i=0; i<mat->m; i++ )
+     vec->ve[i] = mat->me[i][col];
+   
+   return (vec);
+}
+
+/* _v_copy -- copies vector into new area
+	-- out(i0:dim) <- in(i0:dim) */
+#ifndef ANSI_C
+VEC	*_v_copy(in,out,i0)
+VEC	*in,*out;
+unsigned int	i0;
+#else
+VEC	*_v_copy(const VEC *in, VEC *out, unsigned int i0)
+#endif
+{
+	/* unsigned int	i,j; */
+
+	if ( in==out )
+		return (out);
+	if ( out==VNULL || out->dim < in->dim )
+		out = v_resize(out,in->dim);
+
+	MEM_COPY(&(in->ve[i0]),&(out->ve[i0]),(in->dim - i0)*sizeof(double));
+	/* for ( i=i0; i < in->dim; i++ )
+		out->ve[i] = in->ve[i]; */
+
+	return (out);
+}
+
+/* _in_prod -- inner product of two vectors from i0 downwards
+	-- that is, returns a(i0:dim)^T.b(i0:dim) */
+#ifndef ANSI_C
+double	_in_prod(a,b,i0)
+VEC	*a,*b;
+unsigned int	i0;
+#else
+double	_in_prod(const VEC *a, const VEC *b, unsigned int i0)
+#endif
+{
+	unsigned int	limit;
+	/* double	*a_v, *b_v; */
+	/* register double	sum; */
+
+	return __ip__(&(a->ve[i0]),&(b->ve[i0]),(int)(limit-i0));
+	/*****************************************
+	a_v = &(a->ve[i0]);		b_v = &(b->ve[i0]);
+	for ( i=i0; i<limit; i++ )
+		sum += a_v[i]*b_v[i];
+		sum += (*a_v++)*(*b_v++);
+
+	return (double)sum;
+	******************************************/
+}
+
+/* hhvec -- calulates Householder vector to eliminate all entries after the
+	i0 entry of the vector vec. It is returned as out. May be in-situ */
+#ifndef ANSI_C
+VEC	*hhvec(vec,i0,beta,out,newval)
+VEC	*vec,*out;
+unsigned int	i0;
+double	*beta,*newval;
+#else
+VEC	*hhvec(const VEC *vec, unsigned int i0, double *beta,
+	       VEC *out, double *newval)
+#endif
+{
+	double	norm,temp;
+
+	out = _v_copy(vec,out,i0);
+	temp = (double)_in_prod(out,out,i0);
+	norm = sqrt(temp);
+	if ( norm <= 0.0 )
+	{
+		*beta = 0.0;
+		return (out);
+	}
+	*beta = 1.0/(norm * (norm+fabs(out->ve[i0])));
+	if ( out->ve[i0] > 0.0 )
+		*newval = -norm;
+	else
+		*newval = norm;
+	out->ve[i0] -= *newval;
+
+	return (out);
+}
+
+/* _hhtrcols -- transform a matrix by a Householder vector by columns
+	starting at row i0 from column j0 
+	-- that is, M(i0:m,j0:n) <- (I-beta.hh(i0:m).hh(i0:m)^T)M(i0:m,j0:n)
+	-- in-situ
+	-- scratch vector w passed as argument
+	-- raises error if w == NULL
+*/
+#ifndef ANSI_C
+MAT	*_hhtrcols(M,i0,j0,hh,beta,w)
+MAT	*M;
+unsigned int	i0, j0;
+VEC	*hh;
+double	beta;
+VEC	*w;
+#else
+MAT	*_hhtrcols(MAT *M, unsigned int i0, unsigned int j0,
+		   const VEC *hh, double beta, VEC *w)
+#endif
+{
+	/* double	ip, scale; */
+	int	i /*, k */;
+	/*  static	VEC	*w = VNULL; */
+
+	if ( beta == 0.0 )	return (M);
+
+	if ( w->dim < M->n )
+	  w = v_resize(w,M->n);
+	/*  MEM_STAT_REG(w,TYPE_VEC); */
+	v_zero(w);
+
+	for ( i = i0; i < M->m; i++ )
+	    if ( hh->ve[i] != 0.0 )
+		__mltadd__(&(w->ve[j0]),&(M->me[i][j0]),hh->ve[i],
+							(int)(M->n-j0));
+	for ( i = i0; i < M->m; i++ )
+	    if ( hh->ve[i] != 0.0 )
+		__mltadd__(&(M->me[i][j0]),&(w->ve[j0]),-beta*hh->ve[i],
+							(int)(M->n-j0));
+	return (M);
+}
+
+/* hhtrrows -- transform a matrix by a Householder vector by rows
+	starting at row i0 from column j0 -- in-situ
+	-- that is, M(i0:m,j0:n) <- M(i0:m,j0:n)(I-beta.hh(j0:n).hh(j0:n)^T) */
+#ifndef ANSI_C
+MAT	*hhtrrows(M,i0,j0,hh,beta)
+MAT	*M;
+unsigned int	i0, j0;
+VEC	*hh;
+double	beta;
+#else
+MAT	*hhtrrows(MAT *M, unsigned int i0, unsigned int j0,
+		  const VEC *hh, double beta)
+#endif
+{
+	double	ip, scale;
+	int	i /*, j */;
+
+	if ( beta == 0.0 )	return (M);
+
+	/* for each row ... */
+	for ( i = i0; i < M->m; i++ )
+	{	/* compute inner product */
+		ip = __ip__(&(M->me[i][j0]),&(hh->ve[j0]),(int)(M->n-j0));
+		/**************************************************
+		ip = 0.0;
+		for ( j = j0; j < M->n; j++ )
+			ip += M->me[i][j]*hh->ve[j];
+		**************************************************/
+		scale = beta*ip;
+		if ( scale == 0.0 )
+		    continue;
+
+		/* do operation */
+		__mltadd__(&(M->me[i][j0]),&(hh->ve[j0]),-scale,
+							(int)(M->n-j0));
+		/**************************************************
+		for ( j = j0; j < M->n; j++ )
+			M->me[i][j] -= scale*hh->ve[j];
+		**************************************************/
+	}
+
+	return (M);
+}
+
+/* Hfactor -- compute Hessenberg factorisation in compact form.
+	-- factorisation performed in situ
+	-- for details of the compact form see QRfactor.c and matrix2.doc */
+#ifndef ANSI_C
+MAT	*Hfactor(A, diag, beta)
+MAT	*A;
+VEC	*diag, *beta;
+#else
+MAT	*Hfactor(MAT *A, VEC *diag, VEC *beta)
+#endif
+{
+	static	VEC	*hh = VNULL, *w = VNULL;
+	int	k, limit;
+	double b;
+
+	limit = A->m - 1;
+
+	hh = v_resize(hh,A->m);
+	w  = v_resize(w,A->n);
+	MEM_STAT_REG(hh,TYPE_VEC);
+	MEM_STAT_REG(w, TYPE_VEC);
+
+	for ( k = 0; k < limit; k++ )
+	  {
+	    /* compute the Householder vector hh */
+	    get_col(A,(unsigned int)k,hh);
+	    /* printf("the %d'th column = ");	v_output(hh); */
+	    hhvec(hh,k+1,&beta->ve[k],hh,&A->me[k+1][k]);
+	    /* diag->ve[k] = hh->ve[k+1]; */
+	    v_set_val(diag,k,v_entry(hh,k+1));
+	    /* printf("H/h vector = ");	v_output(hh); */
+	    /* printf("from the %d'th entry\n",k+1); */
+	    /* printf("beta = %g\n",beta->ve[k]); */
+
+	    /* apply Householder operation symmetrically to A */
+		b = v_entry(beta,k);
+	    _hhtrcols(A,k+1,k+1,hh,b,w);
+	    hhtrrows(A,0  ,k+1,hh,b);
+	    /* printf("A = ");		m_output(A); */
+	  }
+
+#ifdef THREADSAFE
+	V_FREE(hh);	V_FREE(w);
+#endif
+
+	return (A);
+}
+
+/* hhtrvec -- apply Householder transformation to vector 
+	-- that is, out <- (I-beta.hh(i0:n).hh(i0:n)^T).in
+	-- may be in-situ */
+#ifndef ANSI_C
+VEC	*hhtrvec(hh,beta,i0,in,out)
+VEC	*hh,*in,*out;	/* hh = Householder vector */
+unsigned int	i0;
+double	beta;
+#else
+VEC	*hhtrvec(const VEC *hh, double beta, unsigned int i0,
+		 const VEC *in, VEC *out)
+#endif
+{
+	double	scale,temp;
+	/* unsigned int	i; */
+
+	temp = (double)_in_prod(hh,in,i0);
+	scale = beta*temp;
+	out = v_copy(in,out);
+	__mltadd__(&(out->ve[i0]),&(hh->ve[i0]),-scale,(int)(in->dim-i0));
+	/************************************************************
+	for ( i=i0; i<in->dim; i++ )
+		out->ve[i] = in->ve[i] - scale*hh->ve[i];
+	************************************************************/
+
+	return (out);
+}
+
+/* makeHQ -- construct the Hessenberg orthogonalising matrix Q;
+	-- i.e. Hess M = Q.M.Q'	*/
+#ifndef ANSI_C
+MAT	*makeHQ(H, diag, beta, Qout)
+MAT	*H, *Qout;
+VEC	*diag, *beta;
+#else
+MAT	*makeHQ(MAT *H, VEC *diag, VEC *beta, MAT *Qout)
+#endif
+{
+	int	i, j, limit;
+	static	VEC	*tmp1 = VNULL, *tmp2 = VNULL;
+
+	Qout = m_resize(Qout,H->m,H->m);
+
+	tmp1 = v_resize(tmp1,H->m);
+	tmp2 = v_resize(tmp2,H->m);
+	MEM_STAT_REG(tmp1,TYPE_VEC);
+	MEM_STAT_REG(tmp2,TYPE_VEC);
+
+	for ( i = 0; i < H->m; i++ )
+	{
+		/* tmp1 = i'th basis vector */
+		for ( j = 0; j < H->m; j++ )
+			/* tmp1->ve[j] = 0.0; */
+		    v_set_val(tmp1,j,0.0);
+		/* tmp1->ve[i] = 1.0; */
+		v_set_val(tmp1,i,1.0);
+
+		/* apply H/h transforms in reverse order */
+		for ( j = limit-1; j >= 0; j-- )
+		{
+			get_col(H,(unsigned int)j,tmp2);
+			/* tmp2->ve[j+1] = diag->ve[j]; */
+			v_set_val(tmp2,j+1,v_entry(diag,j));
+			hhtrvec(tmp2,beta->ve[j],j+1,tmp1,tmp1);
+		}
+
+		/* insert into Qout */
+		set_col(Qout,(unsigned int)i,tmp1);
+	}
+
+#ifdef THREADSAFE
+	V_FREE(tmp1);	V_FREE(tmp2);
+#endif
+
+	return (Qout);
+}
+
+/* makeH -- construct actual Hessenberg matrix */
+#ifndef ANSI_C
+MAT	*makeH(H,Hout)
+MAT	*H, *Hout;
+#else
+MAT	*makeH(const MAT *H, MAT *Hout)
+#endif
+{
+	int	i, j, limit;
+
+	Hout = m_resize(Hout,H->m,H->m);
+	Hout = m_copy(H,Hout);
+
+	limit = H->m;
+	for ( i = 1; i < limit; i++ )
+		for ( j = 0; j < i-1; j++ )
+			/* Hout->me[i][j] = 0.0;*/
+		    m_set_val(Hout,i,j,0.0);
+
+	return (Hout);
+}
+
+/* rot_cols -- postmultiply mat by givens rotation described by c,s */
+#ifndef ANSI_C
+MAT	*rot_cols(mat,i,k,c,s,out)
+MAT	*mat,*out;
+unsigned int	i,k;
+double	c,s;
+#else
+MAT	*rot_cols(const MAT *mat,unsigned int i,unsigned int k,
+		  double c, double s, MAT *out)
+#endif
+{
+	unsigned int	j;
+	double	temp;
+
+	if ( mat != out )
+		out = m_copy(mat,m_resize(out,mat->m,mat->n));
+
+	for ( j=0; j<mat->m; j++ )
+	{
+		/* temp = c*out->me[j][i] + s*out->me[j][k]; */
+		temp = c*m_entry(out,j,i) + s*m_entry(out,j,k);
+		/* out->me[j][k] = -s*out->me[j][i] + c*out->me[j][k]; */
+		m_set_val(out,j,k, -s*m_entry(out,j,i) + c*m_entry(out,j,k));
+		/* out->me[j][i] = temp; */
+		m_set_val(out,j,i,temp);
+	}
+
+	return (out);
+}
+
+/* rot_rows -- premultiply mat by givens rotation described by c,s */
+#ifndef ANSI_C
+MAT	*rot_rows(mat,i,k,c,s,out)
+MAT	*mat,*out;
+unsigned int	i,k;
+double	c,s;
+#else
+MAT	*rot_rows(const MAT *mat, unsigned int i, unsigned int k,
+		  double c, double s, MAT *out)
+#endif
+{
+	unsigned int	j;
+	double	temp;
+
+	if ( mat != out )
+		out = m_copy(mat,m_resize(out,mat->m,mat->n));
+
+	for ( j=0; j<mat->n; j++ )
+	{
+		/* temp = c*out->me[i][j] + s*out->me[k][j]; */
+		temp = c*m_entry(out,i,j) + s*m_entry(out,k,j);
+		/* out->me[k][j] = -s*out->me[i][j] + c*out->me[k][j]; */
+		m_set_val(out,k,j, -s*m_entry(out,i,j) + c*m_entry(out,k,j));
+		/* out->me[i][j] = temp; */
+		m_set_val(out,i,j, temp);
+	}
+
+	return (out);
+}
+
+/* hhldr3 -- computes */
+#ifndef ANSI_C
+static	void	hhldr3(x,y,z,nu1,beta,newval)
+double	x, y, z;
+double	*nu1, *beta, *newval;
+#else
+static	void	hhldr3(double x, double y, double z,
+		       double *nu1, double *beta, double *newval)
+#endif
+{
+	double	alpha;
+
+	if ( x >= 0.0 )
+		alpha = sqrt(x*x+y*y+z*z);
+	else
+		alpha = -sqrt(x*x+y*y+z*z);
+	*nu1 = x + alpha;
+	*beta = 1.0/(alpha*(*nu1));
+	*newval = alpha;
+}
+
+/*hhldr3rows */
+#ifndef ANSI_C
+static	void	hhldr3rows(A,k,i0,beta,nu1,nu2,nu3)
+MAT	*A;
+int	k, i0;
+double	beta, nu1, nu2, nu3;
+#else
+static	void	hhldr3rows(MAT *A, int k, int i0, double beta,
+			   double nu1, double nu2, double nu3)
+#endif
+{
+	double	**A_me, ip, prod;
+	int	i, m;
+
+	/* printf("hhldr3rows:(l.%d) A at 0x%lx\n", __LINE__, (long)A); */
+	/* printf("hhldr3rows: k = %d\n", k); */
+	A_me = A->me;		m = A->m;
+	i0 = min(i0,m-1);
+
+	for ( i = 0; i <= i0; i++ )
+	{
+	    /****
+	    ip = nu1*A_me[i][k] + nu2*A_me[i][k+1] + nu3*A_me[i][k+2];
+	    prod = ip*beta;
+	    A_me[i][k]   -= prod*nu1;
+	    A_me[i][k+1] -= prod*nu2;
+	    A_me[i][k+2] -= prod*nu3;
+	    ****/
+
+	    ip = nu1*m_entry(A,i,k)+nu2*m_entry(A,i,k+1)+nu3*m_entry(A,i,k+2);
+	    prod = ip*beta;
+	    m_add_val(A,i,k  , - prod*nu1);
+	    m_add_val(A,i,k+1, - prod*nu2);
+	    m_add_val(A,i,k+2, - prod*nu3);
+
+	}
+}
+
+/* givens -- returns c,s parameters for Givens rotation to
+		eliminate y in the vector [ x y ]' */
+#ifndef ANSI_C
+void	givens(x,y,c,s)
+double  x,y;
+double	*c,*s;
+#else
+void	givens(double x, double y, double *c, double *s)
+#endif
+{
+	double	norm;
+
+	norm = sqrt(x*x+y*y);
+	if ( norm == 0.0 )
+	{	*c = 1.0;	*s = 0.0;	}	/* identity */
+	else
+	{	*c = x/norm;	*s = y/norm;	}
+}
+
+/* schur -- computes the Schur decomposition of the matrix A in situ
+	-- optionally, gives Q matrix such that Q^T.A.Q is upper triangular
+	-- returns upper triangular Schur matrix */
+#ifndef ANSI_C
+MAT	*schur(A,Q)
+MAT	*A, *Q;
+#else
+MAT	*schur(MAT *A, MAT *Q)
+#endif
+{
+    int		i, j, iter, k, k_min, k_max, k_tmp, n, split;
+    double	beta2, c, discrim, dummy, nu1, s, t, tmp, x, y, z;
+    double	**A_me;
+    double	sqrt_macheps;
+    static	VEC	*diag=VNULL, *beta=VNULL;
+
+    n = A->n;
+    diag = v_resize(diag,A->n);
+    beta = v_resize(beta,A->n);
+    MEM_STAT_REG(diag,TYPE_VEC);
+    MEM_STAT_REG(beta,TYPE_VEC);
+    /* compute Hessenberg form */
+    Hfactor(A,diag,beta);
+    
+    /* save Q if necessary */
+    if ( Q )
+	Q = makeHQ(A,diag,beta,Q);
+    makeH(A,A);
+
+    sqrt_macheps = sqrt(MACHEPS);
+
+    k_min = 0;	A_me = A->me;
+
+    while ( k_min < n )
+    {
+	double	a00, a01, a10, a11;
+	double	scale, t, numer, denom;
+
+	/* find k_max to suit:
+	   submatrix k_min..k_max should be irreducible */
+	k_max = n-1;
+	for ( k = k_min; k < k_max; k++ )
+	    /* if ( A_me[k+1][k] == 0.0 ) */
+	    if ( m_entry(A,k+1,k) == 0.0 )
+	    {	k_max = k;	break;	}
+
+	if ( k_max <= k_min )
+	{
+	    k_min = k_max + 1;
+	    continue;		/* outer loop */
+	}
+
+	/* check to see if we have a 2 x 2 block
+	   with complex eigenvalues */
+	if ( k_max == k_min + 1 )
+	{
+	    /* tmp = A_me[k_min][k_min] - A_me[k_max][k_max]; */
+	    a00 = m_entry(A,k_min,k_min);
+	    a01 = m_entry(A,k_min,k_max);
+	    a10 = m_entry(A,k_max,k_min);
+	    a11 = m_entry(A,k_max,k_max);
+	    tmp = a00 - a11;
+	    /* discrim = tmp*tmp +
+		4*A_me[k_min][k_max]*A_me[k_max][k_min]; */
+	    discrim = tmp*tmp + 4*a01*a10;
+	    if ( discrim < 0.0 )
+	    {	/* yes -- e-vals are complex
+		   -- put 2 x 2 block in form [a b; c a];
+		   then eigenvalues have real part a & imag part sqrt(|bc|) */
+		numer = - tmp;
+		denom = ( a01+a10 >= 0.0 ) ?
+		    (a01+a10) + sqrt((a01+a10)*(a01+a10)+tmp*tmp) :
+		    (a01+a10) - sqrt((a01+a10)*(a01+a10)+tmp*tmp);
+		if ( denom != 0.0 )
+		{   /* t = s/c = numer/denom */
+		    t = numer/denom;
+		    scale = c = 1.0/sqrt(1+t*t);
+		    s = c*t;
+		}
+		else
+		{
+		    c = 1.0;
+		    s = 0.0;
+		}
+		rot_cols(A,k_min,k_max,c,s,A);
+		rot_rows(A,k_min,k_max,c,s,A);
+		if ( Q != MNULL )
+		    rot_cols(Q,k_min,k_max,c,s,Q);
+		k_min = k_max + 1;
+		continue;
+	    }
+	    else /* discrim >= 0; i.e. block has two real eigenvalues */
+	    {	/* no -- e-vals are not complex;
+		   split 2 x 2 block and continue */
+		/* s/c = numer/denom */
+		numer = ( tmp >= 0.0 ) ?
+		    - tmp - sqrt(discrim) : - tmp + sqrt(discrim);
+		denom = 2*a01;
+		if ( fabs(numer) < fabs(denom) )
+		{   /* t = s/c = numer/denom */
+		    t = numer/denom;
+		    scale = c = 1.0/sqrt(1+t*t);
+		    s = c*t;
+		}
+		else if ( numer != 0.0 )
+		{   /* t = c/s = denom/numer */
+		    t = denom/numer;
+		    scale = 1.0/sqrt(1+t*t);
+		    c = fabs(t)*scale;
+		    s = ( t >= 0.0 ) ? scale : -scale;
+		}
+		else /* numer == denom == 0 */
+		{
+		    c = 0.0;
+		    s = 1.0;
+		}
+		rot_cols(A,k_min,k_max,c,s,A);
+		rot_rows(A,k_min,k_max,c,s,A);
+		/* A->me[k_max][k_min] = 0.0; */
+		if ( Q != MNULL )
+		    rot_cols(Q,k_min,k_max,c,s,Q);
+		k_min = k_max + 1;	/* go to next block */
+		continue;
+	    }
+	}
+
+	/* now have r x r block with r >= 2:
+	   apply Francis QR step until block splits */
+	split = 0;		iter = 0;
+	while ( ! split )
+	{
+	    iter++;
+	    
+	    /* set up Wilkinson/Francis complex shift */
+	    k_tmp = k_max - 1;
+
+	    a00 = m_entry(A,k_tmp,k_tmp);
+	    a01 = m_entry(A,k_tmp,k_max);
+	    a10 = m_entry(A,k_max,k_tmp);
+	    a11 = m_entry(A,k_max,k_max);
+
+	    /* treat degenerate cases differently
+	       -- if there are still no splits after five iterations
+	          and the bottom 2 x 2 looks degenerate, force it to
+		  split */
+#ifdef DEBUG
+	    printf("# schur: bottom 2 x 2 = [%lg, %lg; %lg, %lg]\n",
+		   a00, a01, a10, a11);
+#endif
+	    if ( iter >= 5 &&
+		 fabs(a00-a11) < sqrt_macheps*(fabs(a00)+fabs(a11)) &&
+		 (fabs(a01) < sqrt_macheps*(fabs(a00)+fabs(a11)) ||
+		  fabs(a10) < sqrt_macheps*(fabs(a00)+fabs(a11))) )
+	    {
+	      if ( fabs(a01) < sqrt_macheps*(fabs(a00)+fabs(a11)) )
+		m_set_val(A,k_tmp,k_max,0.0);
+	      if ( fabs(a10) < sqrt_macheps*(fabs(a00)+fabs(a11)) )
+		{
+		  m_set_val(A,k_max,k_tmp,0.0);
+		  split = 1;
+		  continue;
+		}
+	    }
+
+	    s = a00 + a11;
+	    t = a00*a11 - a01*a10;
+
+	    /* break loop if a 2 x 2 complex block */
+	    if ( k_max == k_min + 1 && s*s < 4.0*t )
+	    {
+		split = 1;
+		continue;
+	    }
+
+	    /* perturb shift if convergence is slow */
+	    if ( (iter % 10) == 0 )
+	    {	s += iter*0.02;		t += iter*0.02;
+	    }
+
+	    /* set up Householder transformations */
+	    k_tmp = k_min + 1;
+	    /********************
+	    x = A_me[k_min][k_min]*A_me[k_min][k_min] +
+		A_me[k_min][k_tmp]*A_me[k_tmp][k_min] -
+		    s*A_me[k_min][k_min] + t;
+	    y = A_me[k_tmp][k_min]*
+		(A_me[k_min][k_min]+A_me[k_tmp][k_tmp]-s);
+	    if ( k_min + 2 <= k_max )
+		z = A_me[k_tmp][k_min]*A_me[k_min+2][k_tmp];
+	    else
+		z = 0.0;
+	    ********************/
+
+	    a00 = m_entry(A,k_min,k_min);
+	    a01 = m_entry(A,k_min,k_tmp);
+	    a10 = m_entry(A,k_tmp,k_min);
+	    a11 = m_entry(A,k_tmp,k_tmp);
+
+	    /********************
+	    a00 = A->me[k_min][k_min];
+	    a01 = A->me[k_min][k_tmp];
+	    a10 = A->me[k_tmp][k_min];
+	    a11 = A->me[k_tmp][k_tmp];
+	    ********************/
+	    x = a00*a00 + a01*a10 - s*a00 + t;
+	    y = a10*(a00+a11-s);
+	    if ( k_min + 2 <= k_max )
+		z = a10* /* m_entry(A,k_min+2,k_tmp) */ A->me[k_min+2][k_tmp];
+	    else
+		z = 0.0;
+
+	    for ( k = k_min; k <= k_max-1; k++ )
+	    {
+		if ( k < k_max - 1 )
+		{
+		    hhldr3(x,y,z,&nu1,&beta2,&dummy);
+		    if ( Q != MNULL )
+			hhldr3rows(Q,k,n-1,beta2,nu1,y,z);
+		}
+		else
+		{
+		    givens(x,y,&c,&s);
+		    rot_cols(A,k,k+1,c,s,A);
+		    rot_rows(A,k,k+1,c,s,A);
+		    if ( Q )
+			rot_cols(Q,k,k+1,c,s,Q);
+		}
+		/* if ( k >= 2 )
+		    m_set_val(A,k,k-2,0.0); */
+		/* x = A_me[k+1][k]; */
+		x = m_entry(A,k+1,k);
+		if ( k <= k_max - 2 )
+		    /* y = A_me[k+2][k];*/
+		    y = m_entry(A,k+2,k);
+		else
+		    y = 0.0;
+		if ( k <= k_max - 3 )
+		    /* z = A_me[k+3][k]; */
+		    z = m_entry(A,k+3,k);
+		else
+		    z = 0.0;
+	    }
+	    /* if ( k_min > 0 )
+		m_set_val(A,k_min,k_min-1,0.0);
+	    if ( k_max < n - 1 )
+		m_set_val(A,k_max+1,k_max,0.0); */
+	    for ( k = k_min; k <= k_max-2; k++ )
+	    {
+		/* zero appropriate sub-diagonals */
+		m_set_val(A,k+2,k,0.0);
+		if ( k < k_max-2 )
+		    m_set_val(A,k+3,k,0.0);
+	    }
+
+	    /* test to see if matrix should split */
+	    for ( k = k_min; k < k_max; k++ )
+		if ( fabs(A_me[k+1][k]) < MACHEPS*
+		    (fabs(A_me[k][k])+fabs(A_me[k+1][k+1])) )
+		{	A_me[k+1][k] = 0.0;	split = 1;	}
+	}
+    }
+    
+    /* polish up A by zeroing strictly lower triangular elements
+       and small sub-diagonal elements */
+    for ( i = 0; i < A->m; i++ )
+	for ( j = 0; j < i-1; j++ )
+	    A_me[i][j] = 0.0;
+    for ( i = 0; i < A->m - 1; i++ )
+	if ( fabs(A_me[i+1][i]) < MACHEPS*
+	    (fabs(A_me[i][i])+fabs(A_me[i+1][i+1])) )
+	    A_me[i+1][i] = 0.0;
+
+#ifdef	THREADSAFE
+    V_FREE(diag);	V_FREE(beta);
+#endif
+
+    return A;
+}
+
+/* schur_vals -- compute real & imaginary parts of eigenvalues
+	-- assumes T contains a block upper triangular matrix
+		as produced by schur()
+	-- real parts stored in real_pt, imaginary parts in imag_pt */
+#ifndef ANSI_C
+void	schur_evals(T,real_pt,imag_pt)
+MAT	*T;
+VEC	*real_pt, *imag_pt;
+#else
+void	schur_evals(MAT *T, VEC *real_pt, VEC *imag_pt)
+#endif
+{
+	int	i, n;
+	double	discrim, **T_me;
+	double	diff, sum, tmp;
+
+	n = T->n;	T_me = T->me;
+	real_pt = v_resize(real_pt,(unsigned int)n);
+	imag_pt = v_resize(imag_pt,(unsigned int)n);
+
+	i = 0;
+	while ( i < n )
+	{
+		if ( i < n-1 && T_me[i+1][i] != 0.0 )
+		{   /* should be a complex eigenvalue */
+		    sum  = 0.5*(T_me[i][i]+T_me[i+1][i+1]);
+		    diff = 0.5*(T_me[i][i]-T_me[i+1][i+1]);
+		    discrim = diff*diff + T_me[i][i+1]*T_me[i+1][i];
+		    if ( discrim < 0.0 )
+		    {	/* yes -- complex e-vals */
+			real_pt->ve[i] = real_pt->ve[i+1] = sum;
+			imag_pt->ve[i] = sqrt(-discrim);
+			imag_pt->ve[i+1] = - imag_pt->ve[i];
+		    }
+		    else
+		    {	/* no -- actually both real */
+			tmp = sqrt(discrim);
+			real_pt->ve[i]   = sum + tmp;
+			real_pt->ve[i+1] = sum - tmp;
+			imag_pt->ve[i]   = imag_pt->ve[i+1] = 0.0;
+		    }
+		    i += 2;
+		}
+		else
+		{   /* real eigenvalue */
+		    real_pt->ve[i] = T_me[i][i];
+		    imag_pt->ve[i] = 0.0;
+		    i++;
+		}
+	}
+}
+
+complex double *getEigvalues(MAT *A){
+    	MAT *T = MNULL, *Q = MNULL;
+    	VEC *evals_re = VNULL, *evals_im = VNULL;
+
+    	complex double *z;
+
+    	Q = m_get(A->m,A->n);
+    	T = m_copy(A,MNULL);
+
+    	/* compute Schur form: A = Q.T.Q^T */
+    	schur(T,Q);
+    	/* extract eigenvalues */
+    	evals_re = v_get(A->m);
+    	evals_im = v_get(A->m);
+    	schur_evals(T,evals_re,evals_im);
+
+    	z=malloc(evals_re->dim*sizeof(complex double));
+    	for(int i=0;i<evals_re->dim;i++){
+    	  	z[i]=evals_re->ve[i]+I*evals_im->ve[i];
+    	}
+    	return z;
+    }
 
 void main(){
 	printf("testing \n");
