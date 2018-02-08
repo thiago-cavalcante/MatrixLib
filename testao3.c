@@ -67,6 +67,8 @@ static const char    *format = "%14.9g ";
 
 #define	m_entry(A,i,j)		m_get_val(A,i,j)
 
+#define printfc(c) printf("%f%c%fi",creal(c),(cimag(c)>=0.0f)? '+':'\0',cimag(c))
+
 /* standard copy & zero functions */
 #define	MEM_COPY(from,to,size)	memmove((to),(from),(size))
 #define	MEM_ZERO(where,size)	memset((where),'\0',(size))
@@ -2122,17 +2124,30 @@ complex double *getEigvalues(MAT *A){
     	  	z[i]=evals_re->ve[i]+I*evals_im->ve[i];
     	}
     	return z;
-    }
+}
+
+double maxMagEigVal(complex double *z, size_t size){
+    	double maximum=0, aux;
+    	for (int c = 1; c < size; c++)
+    	  {
+    		aux=cabs(z[c]);
+    	    if (aux > maximum)
+    	    {
+    	       maximum  = aux;
+    	    }
+    	  }
+    	return (double)maximum;
+}
 
 void main(){
 	printf("testing \n");
     MAT *A = MNULL, *A2 = MNULL, *A3 = MNULL, *A4 = MNULL, *A5 = MNULL, *A6 = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *T = MNULL, *Q = MNULL, *X_re = MNULL, *X_im = MNULL, *Q1 = MNULL, *Q1_inv = MNULL;
     MAT *Q1_temp, *Test = MNULL;
-    //VEC *evals_re = VNULL, *evals_im = VNULL;
+    VEC *evals_re = VNULL, *evals_im = VNULL;
     MAT *F = MNULL, *G = MNULL, *H = MNULL;
     int k=3;
     double y, x0;
-    //complex double *z;
+    complex double *z;
     //ZMAT *ZQ = ZMNULL, *ZQ_temp, *ZQ_inv = ZMNULL, *ZH, *ZF;
 
    //setting up A matrix
@@ -2163,6 +2178,17 @@ void main(){
 	A6=m_get(5,5);
     A6 = m_pow(A,3,A6);
     m_output(A6);
+
+	z = getEigvalues(A);
+	printf("%f + i%f\n", creal(z[0]), cimag(z[0]));
+	printf("%f + i%f\n", creal(z[1]), cimag(z[1]));
+	printf("%f + i%f\n", creal(z[2]), cimag(z[2]));
+	printf("%f + i%f\n", creal(z[3]), cimag(z[3]));
+	printf("%f + i%f\n", creal(z[4]), cimag(z[4]));
+	// for(int i =0; i < sizeof(z)/sizeof(z[0]);++i)
+	// {
+	// 	printfc(z[i]);
+	// }
 //    printf("testing /n");
     //setting up B matrix
 //    B=m_get(4,1);
@@ -2204,23 +2230,23 @@ void main(){
 //
 //    //zm_output(zm_A_bar(A));
 //
-//    Q = m_get(A->m,A->n);
-//    T = m_copy(A,MNULL);
-//
-//    /* compute Schur form: A = Q.T.Q^T */
-//    schur(T,Q);
-//    /* extract eigenvalues */
-//    evals_re = v_get(A->m);
-//    evals_im = v_get(A->m);
-//    schur_evals(T,evals_re,evals_im);
-//
-//    z=malloc(evals_re->dim*sizeof(complex double));
-//    for(int i=0;i<evals_re->dim;i++){
-//    	z[i]=evals_re->ve[i]+I*evals_im->ve[i];
-//    	printf("Z[%d]=%f + i%f\n", i, creal(z[i]), cimag(z[i]));
-//    }
-//
-//    size_t size=(size_t)sizeof(z);
-//    printf("Maximum:%f\n",maxMagEigVal(z,size));
+   Q = m_get(A->m,A->n);
+   T = m_copy(A,MNULL);
+
+   /* compute Schur form: A = Q.T.Q^T */
+   schur(T,Q);
+   /* extract eigenvalues */
+   evals_re = v_get(A->m);
+   evals_im = v_get(A->m);
+   schur_evals(T,evals_re,evals_im);
+
+   z=malloc(evals_re->dim*sizeof(complex double));
+   for(int i=0;i<evals_re->dim;i++){
+   	z[i]=evals_re->ve[i]+I*evals_im->ve[i];
+   	printf("Z[%d]=%f + i%f\n", i, creal(z[i]), cimag(z[i]));
+   }
+
+   size_t size=(size_t)sizeof(z);
+   printf("Maximum:%f\n",maxMagEigVal(z,size));
 
 }
