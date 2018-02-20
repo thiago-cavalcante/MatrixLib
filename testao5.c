@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
-#include <complex.h>
+//#include <math.h>
 #include <string.h>
-#include <malloc.h>
 #include <assert.h>
+
+#define MAX_SIZE 5
 
 /* miscellaneous constants */
 #define	VNULL ((VEC *)NULL)
@@ -885,6 +885,87 @@ double _in_prod(const VEC *a, const VEC *b, unsigned int i0)
   return __ip__(&(a->ve[i0]), &(b->ve[i0]), (int)(limit-i0));
 }
 
+#define SQRT_MAGIC_F 0x5f3759df
+double sqrt2(const float x)
+{
+  const float xhalf = 0.5f*x;
+
+  union // get bits for floating value
+  {
+    float x;
+    int i;
+  } u;
+  u.x = x;
+  u.i = SQRT_MAGIC_F - (u.i >> 1);  // gives initial guess y0
+  return (double)(x*u.x*(1.5f - xhalf*u.x*u.x));// Newton step, repeating increases accuracy
+}
+
+double sqrt5(const float m)
+{
+   float i=0;
+   float x1,x2;
+   while( (i*i) <= m )
+          i+=0.1f;
+   x1=i;
+   for(int j=0;j<10;j++)
+   {
+       x2=m;
+      x2/=x1;
+      x2+=x1;
+      x2/=2;
+      x1=x2;
+   }
+   return x2;
+}
+
+double sqrt11(const double number)
+{
+const double ACCURACY=0.001;
+double lower, upper, guess;
+
+ if (number < 1)
+ {
+  lower = number;
+  upper = 1;
+ }
+ else
+ {
+  lower = 1;
+  upper = number;
+ }
+
+ while ((upper-lower) > ACCURACY)
+ {
+  guess = (lower + upper)/2;
+  if(guess*guess > number)
+   upper =guess;
+  else
+   lower = guess;
+ }
+ return (lower + upper)/2;
+
+}
+
+double sqrt9(const double fg)
+{
+  double n = fg / 2.0;
+  double lstX = 0.0;
+  while(n != lstX)
+  {
+    lstX = n;
+     n = (n + fg/n) / 2.0;
+  }
+  return n;
+}
+
+double fabs2(double n)
+{
+  if(n >= 0)
+    return n; //if positive, return without ant change
+  else
+    return (-n); //if negative, return a positive version
+}
+
 /* hhvec -- calulates Householder vector to eliminate all entries after the
    i0 entry of the vector vec. It is returned as out. May be in-situ */
 #ifndef ANSI_C
@@ -901,13 +982,15 @@ VEC	*hhvec(const VEC *vec, unsigned int i0, double *beta,
 
   out = _v_copy(vec, out, i0);
   temp = (double)_in_prod(out, out, i0);
-  norm = sqrt(temp);
+  printf("temp=%f\n", temp);
+  norm = sqrt9(temp);
+  printf("norm=%f\n", norm);
   if(norm <= 0.0)
   {
     *beta = 0.0;
     return (out);
   }
-  *beta = 1.0/(norm * (norm+fabs(out->ve[i0])));
+  *beta = 1.0/(norm * (norm+fabs2(out->ve[i0])));
   if(out->ve[i0] > 0.0)
     *newval = -norm;
   else
@@ -1190,9 +1273,9 @@ static void hhldr3(double x, double y, double z,
   double alpha;
 
   if(x >= 0.0)
-    alpha = sqrt(x*x+y*y+z*z);
+    alpha = sqrt9(x*x+y*y+z*z);
   else
-    alpha = -sqrt(x*x+y*y+z*z);
+    alpha = -sqrt9(x*x+y*y+z*z);
   *nu1 = x + alpha;
   *beta = 1.0/(alpha*(*nu1));
   *newval = alpha;
@@ -1236,7 +1319,7 @@ void givens(double x, double y, double *c, double *s)
 {
   double norm;
 
-  norm = sqrt(x*x+y*y);
+  norm = sqrt9(x*x+y*y);
   if(norm == 0.0)
   {
     *c = 1.0;
@@ -1278,7 +1361,7 @@ MAT	*schur(MAT *A, MAT *Q)
     Q = makeHQ(A, diag, beta, Q);
   makeH(A, A);
 
-  sqrt_macheps = sqrt(MACHEPS);
+  sqrt_macheps = sqrt9(MACHEPS);
 
   k_min = 0;
   A_me = A->me;
@@ -1321,12 +1404,12 @@ MAT	*schur(MAT *A, MAT *Q)
         then eigenvalues have real part a & imag part sqrt(|bc|) */
         numer = - tmp;
         denom = (a01+a10 >= 0.0) ?
-                (a01+a10) + sqrt((a01+a10)*(a01+a10)+tmp*tmp) :
-                (a01+a10) - sqrt((a01+a10)*(a01+a10)+tmp*tmp);
+                (a01+a10) + sqrt9((a01+a10)*(a01+a10)+tmp*tmp) :
+                (a01+a10) - sqrt9((a01+a10)*(a01+a10)+tmp*tmp);
         if(denom != 0.0)
         {    /* t = s/c = numer/denom */
           t = numer/denom;
-          scale = c = 1.0/sqrt(1+t*t);
+          scale = c = 1.0/sqrt9(1+t*t);
           s = c*t;
         }
         else
@@ -1348,19 +1431,19 @@ MAT	*schur(MAT *A, MAT *Q)
          split 2 x 2 block and continue */
         /* s/c = numer/denom */
         numer = (tmp >= 0.0) ?
-              - tmp - sqrt(discrim) : - tmp + sqrt(discrim);
+              - tmp - sqrt9(discrim) : - tmp + sqrt9(discrim);
         denom = 2*a01;
-        if(fabs(numer) < fabs(denom))
+        if(fabs2(numer) < fabs2(denom))
         {    /* t = s/c = numer/denom */
           t = numer/denom;
-          scale = c = 1.0/sqrt(1+t*t);
+          scale = c = 1.0/sqrt9(1+t*t);
           s = c*t;
         }
         else if(numer != 0.0)
         {    /* t = c/s = denom/numer */
           t = denom/numer;
-          scale = 1.0/sqrt(1+t*t);
-          c = fabs(t)*scale;
+          scale = 1.0/sqrt9(1+t*t);
+          c = fabs2(t)*scale;
           s = (t >= 0.0) ? scale : -scale;
         }
         else /* numer == denom == 0 */
@@ -1401,13 +1484,13 @@ MAT	*schur(MAT *A, MAT *Q)
                a00, a01, a10, a11);
       #endif
       if(iter >= 5 &&
-         fabs(a00-a11) < sqrt_macheps*(fabs(a00)+fabs(a11)) &&
-         (fabs(a01) < sqrt_macheps*(fabs(a00)+fabs(a11)) ||
-          fabs(a10) < sqrt_macheps*(fabs(a00)+fabs(a11))) )
+         fabs2(a00-a11) < sqrt_macheps*(fabs2(a00)+fabs2(a11)) &&
+         (fabs2(a01) < sqrt_macheps*(fabs2(a00)+fabs2(a11)) ||
+          fabs2(a10) < sqrt_macheps*(fabs2(a00)+fabs2(a11))) )
       {
-        if(fabs(a01) < sqrt_macheps*(fabs(a00)+fabs(a11)))
+        if(fabs2(a01) < sqrt_macheps*(fabs2(a00)+fabs2(a11)))
           m_set_val(A, k_tmp, k_max, 0.0);
-        if(fabs(a10) < sqrt_macheps*(fabs(a00)+fabs(a11)))
+        if(fabs2(a10) < sqrt_macheps*(fabs2(a00)+fabs2(a11)))
         {
           m_set_val(A, k_max, k_tmp, 0.0);
           split = 1;
@@ -1483,8 +1566,8 @@ MAT	*schur(MAT *A, MAT *Q)
 
       /* test to see if matrix should split */
       for(k = k_min; k < k_max; k++)
-        if(fabs(A_me[k+1][k]) < MACHEPS*
-          (fabs(A_me[k][k])+fabs(A_me[k+1][k+1])))
+        if(fabs2(A_me[k+1][k]) < MACHEPS*
+          (fabs2(A_me[k][k])+fabs2(A_me[k+1][k+1])))
         {
           A_me[k+1][k] = 0.0;
           split = 1;
@@ -1498,8 +1581,8 @@ MAT	*schur(MAT *A, MAT *Q)
     for(j = 0; j < i-1; j++)
       A_me[i][j] = 0.0;
     for(i = 0; i < A->m - 1; i++)
-      if(fabs(A_me[i+1][i]) < MACHEPS*
-         (fabs(A_me[i][i])+fabs(A_me[i+1][i+1])))
+      if(fabs2(A_me[i+1][i]) < MACHEPS*
+         (fabs2(A_me[i][i])+fabs2(A_me[i+1][i+1])))
         A_me[i+1][i] = 0.0;
 
 #ifdef THREADSAFE
@@ -1540,12 +1623,12 @@ void schur_evals(MAT *T, VEC *real_pt, VEC *imag_pt)
       if(discrim < 0.0)
       { /* yes -- complex e-vals */
         real_pt->ve[i] = real_pt->ve[i+1] = sum;
-        imag_pt->ve[i] = sqrt(-discrim);
+        imag_pt->ve[i] = sqrt9(-discrim);
         imag_pt->ve[i+1] = - imag_pt->ve[i];
       }
       else
       { /* no -- actually both real */
-        tmp = sqrt(discrim);
+        tmp = sqrt9(discrim);
         real_pt->ve[i]   = sum + tmp;
         real_pt->ve[i+1] = sum - tmp;
         imag_pt->ve[i]   = imag_pt->ve[i+1] = 0.0;
@@ -1591,7 +1674,7 @@ CMPLX *m_get_eigenvalues(MAT *A)
 
 double cmplx_mag(double real, double imag)
 {
-  return sqrt(real * real + imag * imag);
+  return sqrt9(real * real + imag * imag);
 }
 
 /* max_mag_eigenvalue -- extracts the magnitude of the maximum eigenvalue
@@ -1658,12 +1741,12 @@ PKVL peak_output(MAT *A, MAT *B, MAT *C, MAT *D, MAT *x0, double yss, double u)
   PKVL out;
   double greater;
   int i = 1;
-  greater = fabs(y_k(A, B, C, D, u, i, x0));
-  while((fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(yss)))
+  greater = fabs2(y_k(A, B, C, D, u, i, x0));
+  while((fabs2(y_k(A, B, C, D, u, i+1, x0)) >= fabs2(yss)))
   {
-    if(greater < fabs(y_k(A, B, C, D, u, i+1, x0)))
+    if(greater < fabs2(y_k(A, B, C, D, u, i+1, x0)))
     {
-      greater = fabs(y_k(A, B, C, D, u, i+1, x0));
+      greater = fabs2(y_k(A, B, C, D, u, i+1, x0));
       out.mp = y_k(A, B, C, D, u, i+1, x0);
       out.kp = i+2;
     }
@@ -1701,16 +1784,176 @@ double y_ss(MAT *A, MAT *B, MAT *C, MAT *D, double u)
   return yss;
 }
 
+double pow2(double a, int n)
+{
+  double r = 1;
+
+  while(n > 0)
+  {
+    if(n & 1)
+      r *= a;
+    a *= a;
+    n >>= 1;
+  }
+  return r;
+}
+
 double c_bar(double mp, double yss, double lambmax, int kp)
 {
   double cbar;
-  cbar = (mp-yss)/(pow(lambmax, kp));
+  cbar = (mp-yss)/(pow2(lambmax, kp));
   return cbar;
+}
+
+/**
+ * Calculate ln logarithm using integers with 16 bit precision
+ * min: fxp_ln(0.000015259<<16)
+ * max: fxp_ln(32767<<16)
+ */
+int fxp_ln(int x)
+{
+  int t, y;
+
+  y = 0xa65af;
+  if(x < 0x00008000)
+    x <<= 16, y -= 0xb1721;
+  if(x < 0x00800000)
+    x <<= 8, y -= 0x58b91;
+  if(x < 0x08000000)
+    x <<= 4, y -= 0x2c5c8;
+  if(x < 0x20000000)
+    x <<= 2, y -= 0x162e4;
+  if(x < 0x40000000)
+    x <<= 1, y -= 0x0b172;
+  t = x + (x >> 1);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x067cd;
+  t = x + (x >> 2);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x03920;
+  t = x + (x >> 3);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x01e27;
+  t = x + (x >> 4);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x00f85;
+  t = x + (x >> 5);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x007e1;
+  t = x + (x >> 6);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x003f8;
+  t = x + (x >> 7);
+  if((t & 0x80000000) == 0)
+    x = t, y -= 0x001fe;
+  x = 0x80000000 - x;
+  y -= x >> 15;
+  return y;
+}
+
+/**
+ * Calculate log10 logarithm using 16 bit precision
+ * min: fxp_log10(0.000015259)
+ * max: fxp_log10(32767.0)
+ */
+double fxp_log10_low(double x)
+{
+  int xint = (int) (x * 65536.0 + 0.5);
+  int lnum = fxp_ln(xint);
+  int lden = fxp_ln(655360);
+  return ((double) lnum / (double) lden);
+}
+
+/**
+ * Calculate log10 logarithm using 16 bit precision
+ * min: fxp_log10(0.000015259)
+ * max: fxp_log10(2147483647.0)
+ */
+double fxp_log10(double x)
+{
+  if(x > 32767.0)
+  {
+    if(x > 1073676289.0)
+    {
+      x = x / 1073676289.0;
+      return fxp_log10_low(x) + 9.030873362;
+    }
+    x = x / 32767.0;
+    return fxp_log10_low(x) + 4.515436681;
+  }
+  return fxp_log10_low(x);
 }
 
 double log_b(double base, double x)
 {
-  return (double) (log(x) / log(base));
+  return (double) (fxp_log10(x) / fxp_log10(base));
+}
+
+double ceil2(double x)
+{
+  union
+  {
+    float f;
+    int i;
+  } float_int;
+
+//    float_int val;
+  float_int.f=x;
+
+  // Extract sign, exponent and mantissa
+  // Bias is removed from exponent
+  int sign=float_int.i >> 31;
+  int exponent=((float_int.i & 0x7fffffff) >> 23) - 127;
+  int mantissa=float_int.i & 0x7fffff;
+
+  // Is the exponent less than zero?
+  if(exponent<0)
+  {
+    // In this case, x is in the open interval (-1, 1)
+    if(x<=0.0f)
+      return 0.0f;
+    else
+      return 1.0f;
+  }
+  else
+  {
+    // Construct a bit mask that will mask off the
+    // fractional part of the mantissa
+    int mask=0x7fffff >> exponent;
+
+    // Is x already an integer (i.e. are all the
+    // fractional bits zero?)
+    if((mantissa & mask) == 0)
+      return x;
+    else
+    {
+      // If x is positive, we need to add 1 to it
+      // before clearing the fractional bits
+      if(!sign)
+      {
+        mantissa+=1 << (23-exponent);
+
+        // Did the mantissa overflow?
+        if(mantissa & 0x800000)
+        {
+          // The mantissa can only overflow if all the
+          // integer bits were previously 1 -- so we can
+          // just clear out the mantissa and increment
+          // the exponent
+          mantissa=0;
+          exponent++;
+        }
+      }
+
+      // Clear the fractional bits
+      mantissa&=~mask;
+    }
+  }
+
+  // Put sign, exponent and mantissa together again
+  float_int.i=(sign << 31) | ((exponent+127) << 23) | mantissa;
+
+  return (double)float_int.f;
 }
 
 int k_bar(double lambdaMax, double p, double cbar, double yss, int order)
@@ -1718,7 +1961,7 @@ int k_bar(double lambdaMax, double p, double cbar, double yss, int order)
   double k_ss, x;
   x = (p * yss) / (100 * cbar);
   k_ss = log_b(lambdaMax, x);
-  return ceil(k_ss)+order;
+  return ceil2(k_ss)+order;
 }
 
 double max_mag_eigenvalue2(MAT *A)
@@ -1759,26 +2002,26 @@ int check_settling_time(MAT *A, MAT *B, MAT *C, MAT *D, MAT *x0,
   printf("cbar=%f", cbar);
   if(kbar * ts < tsr)
   {
-    printf("kbar=%f", kbar);
+    printf("kbar=%i", kbar);
     return 1;
   }
 
-  i = ceil(tsr / ts);
+  i = ceil2(tsr / ts);
   while(i <= kbar)
   {
     output = y_k(A, B, C, D, u, i, x0);
     if(!(output > (yss - (yss * (p/100))) && (output < (yss * (p/100) + yss))))
     {
-      printf("kbar=%f", kbar);
+      printf("kbar=%i", kbar);
       return 0;
     }
     i++;
   }
-  printf("kbar=%f", kbar);
+  printf("kbar=%i", kbar);
   return 1;
 }
 
-void main(){
+int main(){
     MAT *A = MNULL, *A2 = MNULL, *A3 = MNULL, *A4 = MNULL, *A5 = MNULL;
     MAT *A6 = MNULL, *B = MNULL, *C = MNULL, *D = MNULL, *x0 = MNULL;
     CMPLX *z;
@@ -1862,11 +2105,18 @@ void main(){
     int kbar = k_bar(lambmax, 5, cbar, yss, A->m);
     printf("k_bar=%d\n", kbar);
     printf("y_ss=%f\n", yss);
+    printf("result log2: %f\n", sqrt2(2));
+//    printf("result log: %f\n", sqrt(2));
+    printf("result log5: %f\n", sqrt5(2));
+    printf("result log11: %f\n", sqrt11(2));
+    printf("result log9: %f\n", sqrt9(2));
+    printf("result ceil2: %f\n", ceil2(-2.34));
     // Testing
-//    assert(lambmax == 0.824621);
-//    assert(mp == -1.330000);
-//    assert(kp == 4);
-//    assert(cbar == -2.808715397923877);
-//    assert(kbar == 44);
-//    assert(yss == -0.031250000000000);
+    assert(lambmax == 0.824621);
+    assert(mp == -1.330000);
+    assert(kp == 4);
+    assert(cbar == -2.808715397923877);
+    assert(kbar == 44);
+    assert(yss == -0.031250000000000);
+    return 0;
 }
