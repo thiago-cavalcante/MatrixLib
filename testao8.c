@@ -1397,6 +1397,40 @@ int is_same_sign(double a, double b)
     return 0;
 }
 
+/* x_k -- computes the sate signal in the k-th sample */
+double x_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
+{
+  MAT x, Ak, AUX;
+  MAT AUX3, AUX4, AUX5;
+  // y = C * A.pow(k) * X0;
+  Ak = m_get(A.m, A.n);
+  Ak = m_pow(A, k);
+  x = m_get(A.m, A.n);
+  x = m_mlt(Ak, X0);
+  AUX = m_get(A.m, A.n);
+  for(int m = 0; m <= (k - 1); m++)
+  {
+    // y += (C * A.pow(k - m - 1) * B * u) + D * u;
+    Ak = m_pow(A, (k-m-1));
+    AUX = m_mlt(Ak, B);
+    x = m_add(x, AUX);
+  }
+  return x.me[0][0]*u;
+}
+
+/* y_k2 -- computes the output signal in the k-th sample */
+double y_k2(MAT C, MAT D, MAT X0, double u, int k)
+{
+  MAT X0, Ak, AUX, AUX2;
+  double y, temp;
+  // y[k]=Cx[k]+Du[k]
+  AUX = m_get(C.m, X0.n);
+  AUX = m_mlt(C, X0);
+  temp = D.me[0][0] * u;
+  y = AUX.me[0][0] + temp;
+  return y;
+}
+
 /* y_k -- computes the output signal in the k-th sample */
 double y_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
 {
@@ -1669,7 +1703,10 @@ int main(){
     res = check_settling_time(A, B, C, D, X0, u, 24*ts, p, ts);
     printf("res(24) = %d\n", res);
     assert(res == 0);
-//    printf("f_output=%f\n", y_k(A, B, C, D, u, 34-1, X0));
+
+    double x_0, y_k;
+    x_0 = x_k(A, B, C, D, u, 34, X0);
+    y_k = y_k2(C, D, X0, u, 34);
 
 //    // Testing
 //    assert(lambmax == 0.824621);
