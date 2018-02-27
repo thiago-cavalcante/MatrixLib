@@ -74,6 +74,19 @@ typedef	struct
 }
 PKVL;
 
+/* last state vector definition */
+typedef	struct
+{
+  MAT xk;
+  int lastState;
+}
+LST;
+
+/* Global variables */
+// xk stores the last computed state of the system
+LST xk;
+
+
 /******************************math.h Functions******************************/
 
 /* fabs2 -- absolute value of floating-point number */
@@ -419,6 +432,41 @@ MAT m_mlt(const MAT m1, const MAT m2)
   return m3;
 }
 
+/* m_copy -- copies matrix into new area
+  	-- B <- A */
+MAT m_copy(MAT A)
+{
+  MAT B;
+  B.m = A.m;
+  B.max_m = A.max_m;
+  B.max_n = A.max_n;
+  B.max_size = A.max_size;
+  memcpy(B.me, A.me, sizeof (B.me));
+  B.n = A.n;
+  return B;
+}
+
+/* m_mlt_scalar -- multiplication a matrix by a scalar */
+#ifndef ANSI_C
+MAT m_mlt_scalar(m1, scalar)
+MAT m1;
+double scalar;
+#else
+MAT m_mlt_scalar(const MAT m1, const double scalar)
+#endif
+{
+  MAT m2 = m_copy(m1);
+  int i, j;
+  for(i = 0;i < m1.m;i++)
+  {
+    for(j = 0;i < m1.n;j++)
+    {
+      m2.me[i][j] = scalar * m1.me[i][j];
+    }
+  }
+  return m2;
+}
+
 /* m_foutput -- prints a representation of the matrix a onto file/stream fp */
 #ifndef ANSI_C
 void m_foutput(fp, a)
@@ -541,20 +589,6 @@ int len;
     sum  += dp1[i]*dp2[i];
   }
   return sum;
-}
-
-/* m_copy -- copies matrix into new area
-  	-- B <- A */
-MAT m_copy(MAT A)
-{
-  MAT B;
-  B.m = A.m;
-  B.max_m = A.max_m;
-  B.max_n = A.max_n;
-  B.max_size = A.max_size;
-  memcpy(B.me, A.me, sizeof (B.me));
-  B.n = A.n;
-  return B;
 }
 
 /* m_inverse -- returns inverse of A, provided A is not too rank deficient
@@ -1398,34 +1432,28 @@ int is_same_sign(double a, double b)
 }
 
 /* x_k -- computes the sate signal in the k-th sample */
-double x_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
+void x_k(MAT A, MAT B, double u, int k)
 {
-  MAT x, Ak, AUX;
-  MAT AUX3, AUX4, AUX5;
-  // y = C * A.pow(k) * X0;
-  Ak = m_get(A.m, A.n);
-  Ak = m_pow(A, k);
-  x = m_get(A.m, A.n);
-  x = m_mlt(Ak, X0);
-  AUX = m_get(A.m, A.n);
-  for(int m = 0; m <= (k - 1); m++)
-  {
-    // y += (C * A.pow(k - m - 1) * B * u) + D * u;
-    Ak = m_pow(A, (k-m-1));
-    AUX = m_mlt(Ak, B);
-    x = m_add(x, AUX);
-  }
-  return x.me[0][0]*u;
+  MAT AUX, AUX2, AUX3;
+  AUX = m_get(A.m, xk.xk.n);
+  AUX = m_mlt(A, xk.xk);
+  AUX2 = m_get(B.m, B.n);
+  AUX2 = m_mlt_scalar(B, u);
+  AUX3 = m_get(B.m, B.n);
+  AUX3 = m_add(AUX, AUX2);
+  xk.lastState = k;
+  xk.xk = AUX3;
 }
 
 /* y_k2 -- computes the output signal in the k-th sample */
-double y_k2(MAT C, MAT D, MAT X0, double u, int k)
+double y_k2(MAT A, MAT B, MAT C, MAT D, double u, int k)
 {
   MAT Ak, AUX, AUX2;
   double y, temp;
   // y[k]=Cx[k]+Du[k]
-  AUX = m_get(C.m, X0.n);
-  AUX = m_mlt(C, X0);
+  AUX = m_get(C.m, xk.xk.n);
+  x_k(A, B, u, k);
+  AUX = m_mlt(C, xk.xk);
   temp = D.me[0][0] * u;
   y = AUX.me[0][0] + temp;
   return y;
@@ -1456,24 +1484,53 @@ double y_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
   return y.me[0][0]*u;
 }
 
+///* peak_output -- computes the biggest peak value of a signal (Mp) */
+//PKVL peak_output(MAT A, MAT B, MAT C, MAT D, MAT X0, double yss, double u)
+//{
+//  PKVL out;
+//  double greater;
+//  int i = 0;
+//  greater = fabs2(y_k(A, B, C, D, u, i, X0));
+//  while((fabs2(y_k(A, B, C, D, u, i+1, X0)) >= greater))
+//  {
+//    if(greater < fabs2(y_k(A, B, C, D, u, i+1, X0)))
+//    {
+//      greater = fabs2(y_k(A, B, C, D, u, i+1, X0));
+//      out.mp = y_k(A, B, C, D, u, i+1, X0);
+//      out.kp = i+2;
+//    }
+//    else
+//    {
+//      out.mp = y_k(A, B, C, D, u, i+1, X0);
+//      out.kp = i+2;
+//    }
+//    if(!is_same_sign(yss, out.mp))
+//    {
+//      greater = 0;
+//    }
+//    i++;
+//  }
+//  return out;
+//}
+
 /* peak_output -- computes the biggest peak value of a signal (Mp) */
 PKVL peak_output(MAT A, MAT B, MAT C, MAT D, MAT X0, double yss, double u)
 {
   PKVL out;
   double greater;
   int i = 0;
-  greater = fabs2(y_k(A, B, C, D, u, i, X0));
-  while((fabs2(y_k(A, B, C, D, u, i+1, X0)) >= greater))
+  greater = fabs2(y_k2(A, B, C, D, u, i));
+  while((fabs2(y_k2(A, B, C, D, u, i+1)) >= greater))
   {
-    if(greater < fabs2(y_k(A, B, C, D, u, i+1, X0)))
+    if(greater < fabs2(y_k2(A, B, C, D, u, i+1)))
     {
-      greater = fabs2(y_k(A, B, C, D, u, i+1, X0));
-      out.mp = y_k(A, B, C, D, u, i+1, X0);
+      greater = fabs2(y_k2(A, B, C, D, u, i+1));
+      out.mp = y_k2(A, B, C, D, u, i+1);
       out.kp = i+2;
     }
     else
     {
-      out.mp = y_k(A, B, C, D, u, i+1, X0);
+      out.mp = y_k2(A, B, C, D, u, i+1);
       out.kp = i+2;
     }
     if(!is_same_sign(yss, out.mp))
@@ -1665,6 +1722,9 @@ int main(){
     X0=m_get(5,1);
     m_zero(X0.m, X0.n);printf("X0 ");m_output(X0);
     printf("-----------------------------------------------------------\n");
+
+    xk.xk = m_get(A.m, 1);
+
     z = m_get_eigenvalues(A);
     int size = A.m, s = A.m;
     for(int i=0;i<size;i++){
@@ -1680,7 +1740,7 @@ int main(){
     double mp = out.mp;
     int kp = out.kp;
     int d = 2;
-    printf("y(%d)=%f\n", d, y_k(A,B,C,D,1.0,d,X0));
+    printf("y(%d)=%f\n", d, y_k2(A,B,C,D,1.0,d));
     printf("Mp=%f\n", mp);
     printf("kp=%d\n", out.kp);
     double cbar = c_bar(mp, yss, lambmax, kp);
@@ -1703,10 +1763,6 @@ int main(){
     res = check_settling_time(A, B, C, D, X0, u, 24*ts, p, ts);
     printf("res(24) = %d\n", res);
     assert(res == 0);
-
-    double x_0, y_k;
-    x_0 = x_k(A, B, C, D, u, 34, X0);
-    y_k = y_k2(C, D, X0, u, 34);
 
 //    // Testing
 //    assert(lambmax == 0.824621);
