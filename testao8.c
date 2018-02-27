@@ -1421,7 +1421,7 @@ double x_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
 /* y_k2 -- computes the output signal in the k-th sample */
 double y_k2(MAT C, MAT D, MAT X0, double u, int k)
 {
-  MAT X0, Ak, AUX, AUX2;
+  MAT Ak, AUX, AUX2;
   double y, temp;
   // y[k]=Cx[k]+Du[k]
   AUX = m_get(C.m, X0.n);
