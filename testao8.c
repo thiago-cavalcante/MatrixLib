@@ -446,6 +446,25 @@ MAT m_copy(MAT A)
   return B;
 }
 
+/* sm_mlt -- scalar-matrix multiply -- may be in-situ */
+#ifndef ANSI_C
+MAT	sm_mlt(scalar,matrix)
+double	scalar;
+MAT	matrix;
+#else
+MAT	sm_mlt(double scalar, const MAT matrix)
+#endif
+{
+  MAT out;
+  unsigned int	m, n, i, j;
+  m = matrix.m;	n = matrix.n;
+  out = m_get(m, n);
+  for( i=0; i<m; i++ )
+    for ( j=0; j<n; j++ )
+      out.me[i][j] = scalar*matrix.me[i][j];
+  return (out);
+}
+
 /* m_mlt_scalar -- multiplication a matrix by a scalar */
 #ifndef ANSI_C
 MAT m_mlt_scalar(m1, scalar)
@@ -456,11 +475,14 @@ MAT m_mlt_scalar(const MAT m1, const double scalar)
 #endif
 {
   MAT m2 = m_copy(m1);
+  printf("we are here!\n");
   int i, j;
   for(i = 0;i < m1.m;i++)
   {
+    printf("we are here2!\n");
     for(j = 0;i < m1.n;j++)
     {
+      printf("we are here3!\n");
       m2.me[i][j] = scalar * m1.me[i][j];
     }
   }
@@ -1435,14 +1457,17 @@ int is_same_sign(double a, double b)
 void x_k(MAT A, MAT B, double u, int k)
 {
   MAT AUX, AUX2, AUX3;
-  AUX = m_get(A.m, xk.xk.n);
-  AUX = m_mlt(A, xk.xk);
-  AUX2 = m_get(B.m, B.n);
-  AUX2 = m_mlt_scalar(B, u);
-  AUX3 = m_get(B.m, B.n);
-  AUX3 = m_add(AUX, AUX2);
-  xk.lastState = k;
-  xk.xk = AUX3;
+  if(xk.lastState == (k - 1))
+  {
+	AUX = m_get(A.m, xk.xk.n);
+    AUX = m_mlt(A, xk.xk);
+    AUX2 = m_get(B.m, B.n);
+    AUX2 = sm_mlt(u, B);
+    AUX3 = m_get(B.m, B.n);
+    AUX3 = m_add(AUX, AUX2);
+    xk.lastState = k;
+    xk.xk = AUX3;
+  }
 }
 
 /* y_k2 -- computes the output signal in the k-th sample */
@@ -1483,35 +1508,6 @@ double y_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
   }
   return y.me[0][0]*u;
 }
-
-///* peak_output -- computes the biggest peak value of a signal (Mp) */
-//PKVL peak_output(MAT A, MAT B, MAT C, MAT D, MAT X0, double yss, double u)
-//{
-//  PKVL out;
-//  double greater;
-//  int i = 0;
-//  greater = fabs2(y_k(A, B, C, D, u, i, X0));
-//  while((fabs2(y_k(A, B, C, D, u, i+1, X0)) >= greater))
-//  {
-//    if(greater < fabs2(y_k(A, B, C, D, u, i+1, X0)))
-//    {
-//      greater = fabs2(y_k(A, B, C, D, u, i+1, X0));
-//      out.mp = y_k(A, B, C, D, u, i+1, X0);
-//      out.kp = i+2;
-//    }
-//    else
-//    {
-//      out.mp = y_k(A, B, C, D, u, i+1, X0);
-//      out.kp = i+2;
-//    }
-//    if(!is_same_sign(yss, out.mp))
-//    {
-//      greater = 0;
-//    }
-//    i++;
-//  }
-//  return out;
-//}
 
 /* peak_output -- computes the biggest peak value of a signal (Mp) */
 PKVL peak_output(MAT A, MAT B, MAT C, MAT D, MAT X0, double yss, double u)
@@ -1615,6 +1611,8 @@ int check_settling_time(MAT A, MAT B, MAT C, MAT D, MAT X0,
   double yss, mp, lambMax, cbar, output, inf, sup;
   PKVL out;
   int kbar, kp, i;
+//  xk.xk = m_get(A.m, 1);
+//  xk.lastState = 0;
   yss = y_ss(A, B, C, D, u);
   out = peak_output(A, B, C, D, X0, yss, u);
   mp = out.mp;
@@ -1633,9 +1631,11 @@ int check_settling_time(MAT A, MAT B, MAT C, MAT D, MAT X0,
     return 1;
   }
   i = (int)ceil2(tsr / ts);
+  xk.lastState = i-3;
+  x_k(A, B, u, i-2);
   while(i <= kbar)
   {
-    output = y_k(A, B, C, D, u, i-1, X0);
+    output = y_k2(A, B, C, D, u, i-1);
     if(yss > 0)
     {
       inf = (yss - (yss * (p/100)));
@@ -1695,6 +1695,7 @@ int main(){
     printf("m_pow4(A, 4)=\n");m_output(m_pow(A, 4));
     printf("m_pow5(A, 5)=\n");m_output(m_pow(A, 5));
     printf("m_pow6(A, 6)=\n");m_output(m_pow(A, 6));
+    printf("sm_mlt(2, A)=\n");m_output(sm_mlt(2, A));
 
     //setting up B matrix
 //    B=m_get(4,1);
