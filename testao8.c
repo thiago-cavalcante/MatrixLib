@@ -1453,7 +1453,7 @@ int is_same_sign(double a, double b)
     return 0;
 }
 
-/* x_k -- computes the sate signal in the k-th sample */
+/* x_k -- computes the state signal in the k-th sample */
 void x_k(MAT A, MAT B, double u, int k)
 {
   MAT AUX, AUX2, AUX3;
@@ -1481,6 +1481,48 @@ double y_k2(MAT A, MAT B, MAT C, MAT D, double u, int k)
   AUX = m_mlt(C, xk.xk);
   temp = D.me[0][0] * u;
   y = AUX.me[0][0] + temp;
+  return y;
+}
+
+/* x_k2 -- computes the state signal in the k-th sample */
+MAT x_k2(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
+{
+  MAT x, Ak, AUX, AUX2;
+  MAT AUX3, AUX4, AUX5;
+  // y = C * A.pow(k) * X0;
+  Ak = m_get(A.m, A.n);
+  Ak = m_pow(A, k);
+  x = m_get(A.m, 1);
+  x = m_mlt(Ak, X0);
+  AUX = m_get(A.m, 1);
+  AUX2 = m_get(A.m, 1);
+  for(int m = 0; m <= (k - 1); m++)
+  {
+    // y += (C * A.pow(k - m - 1) * B * u) + D * u;
+    Ak = m_pow(A, (k-m-1));
+    AUX = m_mlt(Ak, B);
+    AUX2 = sm_mlt(u, AUX);
+    x = m_add(x, AUX2);
+  }
+  xk.lastState = k;
+  xk.xk = m_copy(x);
+  return x;
+}
+
+/* y_k3 -- computes the output signal in the k-th sample */
+double y_k3(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
+{
+  MAT Ak, Xk, AUX, AUX2;
+  double y, temp;
+  Xk = m_get(A.m, 1);
+  Xk = x_k2(A, B, C, D, u, k, X0);
+  // y[k]=Cx[k]+Du[k]
+  AUX = m_get(C.m, Xk.n);
+//  x_k(A, B, u, k);
+  AUX = m_mlt(C, Xk);
+  AUX2 = m_get(D.m, D.n);
+  AUX2 = sm_mlt(u, D);
+  y = AUX.me[0][0] + AUX2.me[0][0];
   return y;
 }
 
@@ -1630,10 +1672,10 @@ int check_settling_time(MAT A, MAT B, MAT C, MAT D, MAT X0,
     printf("kbar=%d\n", kbar);
     return 1;
   }
-  i = (int)ceil2(tsr / ts);
+  i = (int)ceil2(tsr / ts)-1;
+  output = y_k3(A, B, C, D, u, i, X0);
   while(i <= kbar)
   {
-    output = y_k(A, B, C, D, u, i-1, X0);
     if(yss > 0)
     {
       inf = (yss - (yss * (p/100)));
@@ -1650,8 +1692,8 @@ int check_settling_time(MAT A, MAT B, MAT C, MAT D, MAT X0,
       return 0;
     }
     i++;
+    output = y_k2(A, B, C, D, u, i);
   }
-  printf("kbar=%d\n", kbar);
   return 1;
 }
 
@@ -1733,20 +1775,20 @@ int main(){
     double lambmax = max_mag_eigenvalue(A);
     printf("Maximum:%f\n", lambmax);
 
-    PKVL out;
-    double yss = y_ss(A, B, C, D, 1.0);
-    out = peak_output(A, B, C, D, X0, yss, 1.0);
-    double mp = out.mp;
-    int kp = out.kp;
-    int d = 2;
-    printf("y(%d)=%f\n", d, y_k2(A,B,C,D,1.0,d));
-    printf("Mp=%f\n", mp);
-    printf("kp=%d\n", out.kp);
-    double cbar = c_bar(mp, yss, lambmax, kp);
-    printf("c_bar=%f\n", cbar);
-    int kbar = k_bar(lambmax, 5, cbar, yss, A.m);
-    printf("k_bar=%d\n", kbar);
-    printf("y_ss=%f\n", yss);
+//    PKVL out;
+//    double yss = y_ss(A, B, C, D, 1.0);
+//    out = peak_output(A, B, C, D, X0, yss, 1.0);
+//    double mp = out.mp;
+//    int kp = out.kp;
+//    int d = 2;
+//    printf("y(%d)=%f\n", d, y_k2(A,B,C,D,1.0,d));
+//    printf("Mp=%f\n", mp);
+//    printf("kp=%d\n", out.kp);
+//    double cbar = c_bar(mp, yss, lambmax, kp);
+//    printf("c_bar=%f\n", cbar);
+//    int kbar = k_bar(lambmax, 5, cbar, yss, A.m);
+//    printf("k_bar=%d\n", kbar);
+//    printf("y_ss=%f\n", yss);
 
 //    printf("The result is = %d\n", check_settling_time(A, B, C, D, X0, u, tsr, p, ts));
 
