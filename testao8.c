@@ -1611,8 +1611,8 @@ int check_settling_time(MAT A, MAT B, MAT C, MAT D, MAT X0,
   double yss, mp, lambMax, cbar, output, inf, sup;
   PKVL out;
   int kbar, kp, i;
-//  xk.xk = m_get(A.m, 1);
-//  xk.lastState = 0;
+  xk.xk = m_get(A.m, 1);
+  xk.lastState = 0;
   yss = y_ss(A, B, C, D, u);
   out = peak_output(A, B, C, D, X0, yss, u);
   mp = out.mp;
@@ -1631,11 +1631,9 @@ int check_settling_time(MAT A, MAT B, MAT C, MAT D, MAT X0,
     return 1;
   }
   i = (int)ceil2(tsr / ts);
-  xk.lastState = i-3;
-  x_k(A, B, u, i-2);
   while(i <= kbar)
   {
-    output = y_k2(A, B, C, D, u, i-1);
+    output = y_k(A, B, C, D, u, i-1, X0);
     if(yss > 0)
     {
       inf = (yss - (yss * (p/100)));
