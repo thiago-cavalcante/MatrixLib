@@ -411,13 +411,21 @@ MAT m_mlt(const MAT m1, const MAT m2)
   	-- B <- A */
 MAT m_copy(MAT A)
 {
-  MAT B;
-  B.m = A.m;
-  B.max_m = A.max_m;
-  B.max_n = A.max_n;
-  B.max_size = A.max_size;
-  memcpy(B.me, A.me, MAX_SIZE*MAX_SIZE*8);
-  B.n = A.n;
+  MAT B = m_get(A.m, A.n);
+  int i, j;
+//  B.m = A.m;
+//  B.max_m = A.max_m;
+//  B.max_n = A.max_n;
+//  B.max_size = A.max_size;
+  for(i = 0; i < A.m; i++)
+  {
+    for(j = 0; j < A.n; j++)
+	{
+      B.me[i][j] = A.me[i][j];
+	}
+  }
+//  memcpy(B.me, A.me, MAX_SIZE*MAX_SIZE*8);
+//  B.n = A.n;
   return B;
 }
 
@@ -541,10 +549,13 @@ VEC A;
 VEC v_copy(const VEC A)
 #endif
 {
-  VEC B;
-  B.dim = A.dim;
-  B.max_dim = A.max_dim;
-  memcpy(B.ve, A.ve, MAX_SIZE*8);
+  VEC B = v_get(A.dim);
+  int i;
+//  B.dim = A.dim;
+//  B.max_dim = A.max_dim;
+  for(i = 0; i < A.dim; i++)
+    B.ve[i] = A.ve[i];
+//  memcpy(B.ve, A.ve, MAX_SIZE*8);
   return B;
 }
 
@@ -1119,7 +1130,14 @@ MAT schur(MAT A, MAT Q)
   A = makeH(A);
   sqrt_macheps = sp_sqrt(MACHEPS);
   k_min = 0;
-  memcpy(A_me, A.me, MAX_SIZE*MAX_SIZE*8);
+//  memcpy(A_me, A.me, MAX_SIZE*MAX_SIZE*8);
+  for(i = 0; i < A.m; i++)
+  {
+    for(j = 0; j < A.n; j++)
+    {
+    	A_me[i][j] = A.me[i][j];
+    }
+  }
   while(k_min < n)
   {
     double a00, a01, a10, a11;
@@ -1341,11 +1359,18 @@ VEC *real_pt, *imag_pt;
 void schur_evals(MAT *T, VEC *real_pt, VEC *imag_pt)
 #endif
 {
-  int i, n;
+  int i, j, n;
   double discrim, T_me[MAX_SIZE][MAX_SIZE];
   double diff, sum, tmp;
   n = T->n;
-  memcpy(T_me, T->me, MAX_SIZE*MAX_SIZE*8);
+//  memcpy(T_me, T->me, MAX_SIZE*MAX_SIZE*8);
+  for(i = 0; i < T->m; i++)
+  {
+    for(j = 0; j < T->n; j++)
+    {
+      T_me[i][j] = T->me[i][j];
+    }
+  }
   i = 0;
   while(i < n)
   {
@@ -1713,7 +1738,6 @@ int main(){
     printf("m_pow4(A, 4)=\n");m_output(m_pow(A, 4));
     printf("m_pow5(A, 5)=\n");m_output(m_pow(A, 5));
     printf("m_pow6(A, 6)=\n");m_output(m_pow(A, 6));
-    printf("sm_mlt(2, A)=\n");m_output(sm_mlt(2, A));
 
     //setting up B matrix
 //    B=m_get(2,1);
