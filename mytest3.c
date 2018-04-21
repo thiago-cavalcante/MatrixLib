@@ -8,6 +8,8 @@
 
 #define MACHEPS 2.22045e-16
 
+#define SQRT_MAGIC_F 0x5f3759df
+
 #define DEBUG
 
 #ifdef DEBUG
@@ -15,10 +17,6 @@
 #endif
 
 static const char *format = "%14.9g ";
-
-#ifndef ANSI_C
-#define ANSI_C 1
-#endif
 
 #define	v_chk_idx(x, dim, i) ((i)>=0 && (i)<dim)
 
@@ -43,23 +41,6 @@ static const char *format = "%14.9g ";
 #define	min(a, b) ((a) > (b) ? (b) : (a))
 #endif /* min */
 
-/* matrix definition */
-typedef	struct
-{
-  unsigned int m, n;
-  unsigned int max_m, max_n, max_size;
-  double me[MAX_SIZE][MAX_SIZE];
-}
-MAT;
-
-/* vector definition */
-typedef	struct
-{
-  unsigned int dim, max_dim;
-  double ve[MAX_SIZE];
-}
-VEC;
-
 /* complex number definition */
 typedef	struct
 {
@@ -78,7 +59,7 @@ PKVL;
 /* last state vector definition */
 typedef	struct
 {
-  MAT xk;
+  double xk[MAX_SIZE][MAX_SIZE];
   int lastState;
 }
 LST;
@@ -245,32 +226,62 @@ double sp_floor(double num)
   if (d == num || num >= 0)
     return d;
   else
-    return d - 1;
+    return (d - 1);
 }
 
+///* sp_sqrt -- returns the square root of fg */
+//double sp_sqrt(double fg)
+//{
+//  double n, lstX;
+//  n = fg / 2;
+//  lstX = 0;
+//  while(n != lstX)
+//  {
+//    lstX = n;
+//    n = (n + (fg/n))/2;
+//  }
+//  return n;
+//}
+
 /* sp_sqrt -- returns the square root of fg */
-double sp_sqrt(double fg)
+double sp_sqrt(double x)
 {
-  double n = fg / 2.0;
-  double lstX = 0.0;
-  while(n != lstX)
-  {
-    lstX = n;
-    n = (n + fg/n) / 2.0;
-  }
-  return n;
+	union {
+		int i;
+		float x;
+	} u;
+	u.x = x;
+	u.i = (1 << 29) + (u.i >> 1) - (1 << 22);
+
+	// Two Babylonian Steps (simplified from:)
+	// u.x = 0.5f * (u.x + x/u.x);
+	// u.x = 0.5f * (u.x + x/u.x);
+	u.x = u.x + x / u.x;
+	u.x = 0.25f * u.x + x / u.x;
+
+	return (double)u.x;
 }
+
+///* sp_sqrt -- returns the square root of fg */
+//double sp_sqrt(double x)
+//{
+//	float xhalf = 0.5f*x;
+//
+//	  union // get bits for floating value
+//	  {
+//	    float x;
+//	    int i;
+//	  } u;
+//	  u.x = x;
+//	  u.i = SQRT_MAGIC_F - (u.i >> 1);  // gives initial guess y0
+//	  return (double) (x*u.x*(1.5f - xhalf*u.x*u.x));// Newton step, repeating increases accuracy
+//}
 
 /******************************Matrix Functions******************************/
 
 /* m_add -- matrix addition -- may be in-situ */
-#ifndef ANSI_C
-void m_add(m1, m2, m3, row, col)
-double m1[MAX_SIZE][MAX_SIZE], m2[MAX_SIZE][MAX_SIZE], m3[MAX_SIZE][MAX_SIZE];
-int row, col;
-#else
-void m_add(double m1[MAX_SIZE][MAX_SIZE], double m2[MAX_SIZE][MAX_SIZE], double m3[MAX_SIZE][MAX_SIZE], int row, int col)
-#endif
+void m_add(double m1[MAX_SIZE][MAX_SIZE], double m2[MAX_SIZE][MAX_SIZE],
+           double m3[MAX_SIZE][MAX_SIZE], int row, int col)
 {
   unsigned int i, j;
   for(i = 0; i < row; i++)
@@ -283,13 +294,8 @@ void m_add(double m1[MAX_SIZE][MAX_SIZE], double m2[MAX_SIZE][MAX_SIZE], double 
 }
 
 /* m_sub -- matrix subtraction -- may be in-situ */
-#ifndef ANSI_C
-void m_sub(m1, m2, m3, row, col)
-double m1[MAX_SIZE][MAX_SIZE], m2[MAX_SIZE][MAX_SIZE], m3[MAX_SIZE][MAX_SIZE];
-int row, col;
-#else
-void m_sub(double m1[MAX_SIZE][MAX_SIZE], double m2[MAX_SIZE][MAX_SIZE], double m3[MAX_SIZE][MAX_SIZE], int row, int col)
-#endif
+void m_sub(double m1[MAX_SIZE][MAX_SIZE], double m2[MAX_SIZE][MAX_SIZE],
+           double m3[MAX_SIZE][MAX_SIZE], int row, int col)
 {
   unsigned int i, j;
   for(i = 0; i < row; i++)
@@ -302,13 +308,7 @@ void m_sub(double m1[MAX_SIZE][MAX_SIZE], double m2[MAX_SIZE][MAX_SIZE], double 
 }
 
 /* m_zero -- zero the matrix A */
-#ifndef ANSI_C
-MAT m_zero(A, m, n)
-double A[MAX_SIZE][MAX_SIZE];
-int m, n;
-#else
 void m_zero(double A[MAX_SIZE][MAX_SIZE], int m, int n)
-#endif
 {
   int i, j, A_m, A_n;
   for(i = 0; i < m; i++)
@@ -317,14 +317,7 @@ void m_zero(double A[MAX_SIZE][MAX_SIZE], int m, int n)
 }
 
 /* __mltadd__ -- scalar multiply and add c.f. v_mltadd() */
-#ifndef ANSI_C
-void __mltadd__(dp1, dp2, s, len)
-register double	*dp1, *dp2;
-register double s;
-register int len;
-#else
 void __mltadd__(double *dp1, const double *dp2, double s, int len)
-#endif
 {
   register int i;
 #ifdef VUNROLL
@@ -345,34 +338,24 @@ void __mltadd__(double *dp1, const double *dp2, double s, int len)
 }
 
 /* m_mlt -- matrix-matrix multiplication */
-#ifndef ANSI_C
-void m_mlt(m1, m1_m, m1_n, m2, m2_m, m2_n, m3)
-const double m1[MAX_SIZE][MAX_SIZE], m2[MAX_SIZE][MAX_SIZE], m3[MAX_SIZE][MAX_SIZE];
-int m1_m, m1_n, m2_m, m2_n;
-#else
-void m_mlt(const double m1[MAX_SIZE][MAX_SIZE], int m1_m, int m1_n, const double m2[MAX_SIZE][MAX_SIZE], int m2_m, int m2_n, double m3[MAX_SIZE][MAX_SIZE])
-#endif
+void m_mlt(const double m1[MAX_SIZE][MAX_SIZE], int m1_m, int m1_n,
+           const double m2[MAX_SIZE][MAX_SIZE], int m2_m, int m2_n,
+           double m3[MAX_SIZE][MAX_SIZE])
 {
-  unsigned int i1, j1, i2, j2;
   unsigned int i, j, k;
-  i1 = m1_m;
-  j1 = m1_n;
-  i2 = m2_m;
-  j2 = m2_n;
-  if(j1 == i2)
+  if(m1_n == m2_m)
   {
-    double mult;
+//    double mult;
     // Checking if the multiplication is possible
     // Initialising Matrix 3
-//    m3 = m_get(i1, j2);
     // Calculating multiplication result
-    for(i = 0; i < i1; i++)
+    for(i = 0; i < m1_m; i++)
     {
-      for(j = 0; j < j2; j++)
+      for(j = 0; j < m2_n; j++)
       {
-        for(k = 0; k < j1; k++)
+        for(k = 0; k < m1_n; k++)
         {
-          mult = (m1[i][k] * m2[k][j]);
+//          mult = (m1[i][k] * m2[k][j]);
           m3[i][j] = m3[i][j] + (m1[i][k] * m2[k][j]);
         }
       }
@@ -388,7 +371,8 @@ void m_mlt(const double m1[MAX_SIZE][MAX_SIZE], int m1_m, int m1_n, const double
 
 /* m_copy -- copies matrix into new area
   	-- B <- A */
-void m_copy(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE], int m, int n)
+void m_copy(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+            int m, int n)
 {
   int i, j;
   for(i = 0; i < m; i++)
@@ -400,30 +384,18 @@ void m_copy(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE], int m, i
   }
 }
 
-/* sm_mlt -- scalar-matrix multiply -- may be in-situ */
-#ifndef ANSI_C
-void sm_mlt(scalar, matrix, out, m, n)
-double scalar;
-double matrix[MAX_SIZE][MAX_SIZE], out[MAX_SIZE][MAX_SIZE];
-int m, n;
-#else
-void sm_mlt(double scalar, double matrix[MAX_SIZE][MAX_SIZE], double out[MAX_SIZE][MAX_SIZE], int m, int n)
-#endif
-{
-  unsigned int i, j;
-  for(i = 0; i < m; i++)
-    for (j = 0; j < n; j++)
-      out[i][j] = scalar*matrix[i][j];
-}
+///* sm_mlt -- scalar-matrix multiply -- may be in-situ */
+//void sm_mlt(double scalar, double matrix[MAX_SIZE][MAX_SIZE],
+//            double out[MAX_SIZE][MAX_SIZE], int m, int n)
+//{
+//  unsigned int i, j;
+//  for(i = 0; i < m; i++)
+//    for (j = 0; j < n; j++)
+//      out[i][j] = scalar*matrix[i][j];
+//}
 
 /* v_zero -- zero the vector x */
-#ifndef ANSI_C
-void v_zero(x, dim)
-double x[MAX_SIZE];
-int dim;
-#else
 void v_zero(double x[MAX_SIZE], int dim)
-#endif
 {
   int i;
   for(i = 0; i < dim; i++)
@@ -432,29 +404,18 @@ void v_zero(double x[MAX_SIZE], int dim)
 
 /* set_col -- sets column of matrix to values given in vec (in situ)
 	-- that is, mat(i0:lim,col) <- vec(i0:lim) */
-#ifndef ANSI_C
-void set_col(mat, mat_m, col, vec, dim)
-double mat[MAX_SIZE][MAX_SIZE];
-double vec[MAX_SIZE];
-unsigned int col, mat_m, dim;
-#else
-void set_col(double mat[MAX_SIZE][MAX_SIZE], unsigned int mat_m, unsigned int col, double vec[MAX_SIZE], unsigned int dim)
-#endif
+void set_col(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int col,
+             double vec[MAX_SIZE], double matOut[MAX_SIZE][MAX_SIZE])
 {
-  unsigned int i, lim, i0;
-  lim = min(mat_m, dim);
-  for(i = i0; i < lim; i++)
-    mat[i][col] = vec[i];
+  unsigned int i;
+  m_copy(mat, matOut, dim, dim);
+  for(i = 0; i < dim; i++)
+    matOut[i][col] = vec[i];
 }
 
 /* v_copy -- copies vector into new area
 	-- B <- A */
-#ifndef ANSI_C
-void v_copy(A, B)
-const double A[MAX_SIZE], B[MAX_SIZE];
-#else
 void v_copy(double A[MAX_SIZE], double B[MAX_SIZE], int dim)
-#endif
 {
   int i;
   for(i = 0; i < dim; i++)
@@ -462,22 +423,14 @@ void v_copy(double A[MAX_SIZE], double B[MAX_SIZE], int dim)
 }
 
 /* __ip__ -- inner product */
-#ifndef ANSI_C
-double __ip__(dp1, dp2, len)
-register double	*dp1, *dp2;
-int len;
-#else
-  double __ip__(const double *dp1, const double *dp2, int len)
-#endif
+double __ip__(const double *dp1, const double *dp2, int len)
 {
-#ifdef VUNROLL
-  register int len4;
-  register double sum1, sum2, sum3;
-#endif
   register int i;
   register double sum;
   sum = 0.0;
 #ifdef VUNROLL
+  register int len4;
+  register double sum1, sum2, sum3;
   sum1 = sum2 = sum3 = 0.0;
   len4 = len / 4;
   len  = len % 4;
@@ -501,14 +454,8 @@ int len;
 
 /* m_inverse -- returns inverse of A, provided A is not too rank deficient
   -- uses Gauss - Jordan */
-#ifndef ANSI_C
-void m_inverse(A, out, dim)
-double A[MAX_SIZE][MAX_SIZE];
-double out[MAX_SIZE][MAX_SIZE];
-int dim;
-#else
-void m_inverse(double A[MAX_SIZE][MAX_SIZE], double out[MAX_SIZE][MAX_SIZE], int dim)
-#endif
+void m_inverse(double A[MAX_SIZE][MAX_SIZE], double out[MAX_SIZE][MAX_SIZE],
+               int dim)
 {
   int i, j, k, matsize;
   double temp;
@@ -570,13 +517,7 @@ void m_inverse(double A[MAX_SIZE][MAX_SIZE], double out[MAX_SIZE][MAX_SIZE], int
 
 /* m_ident -- set A to being closest to identity matrix as possible
   -- i.e. A[i][j] == 1 if i == j and 0 otherwise */
-#ifndef ANSI_C
-void m_ident(A, dim)
-double A[MAX_SIZE];
-int dim;
-#else
 void m_ident(double A[MAX_SIZE][MAX_SIZE], int dim)
-#endif
 {
   int i, size;
   m_zero(A, dim, dim);
@@ -585,23 +526,26 @@ void m_ident(double A[MAX_SIZE][MAX_SIZE], int dim)
     A[i][i] = 1.0;
 }
 
-void print_arr(double m[MAX_SIZE][MAX_SIZE], int row, int col)
-{
-  int i, j;
-  for (i = 0; i < row; i++) {
-    for (j = 0; j < col; j++) {
-	  printf("%f ", m[i][j]);
-    }
-    printf("\n");
-  }
-}
+//void print_arr(double m[MAX_SIZE][MAX_SIZE], int row, int col)
+//{
+//  int i, j;
+//  for (i = 0; i < row; i++) {
+//    for (j = 0; j < col; j++) {
+//	  printf("%f ", m[i][j]);
+//    }
+//    printf("\n");
+//  }
+//}
 
-/* fast_m_pow -- auxiliary function to compute integer powers of a square matrix M, M^n */
-void fast_m_pow(double m[MAX_SIZE][MAX_SIZE], int power, double result[MAX_SIZE][MAX_SIZE], int dim)
+/* fast_m_pow -- auxiliary function to compute integer powers of a
+ * square matrix M, M^n */
+void fast_m_pow(double m[MAX_SIZE][MAX_SIZE], int power,
+                double result[MAX_SIZE][MAX_SIZE], int dim)
 {
-  double out[MAX_SIZE][MAX_SIZE], out2[MAX_SIZE][MAX_SIZE], temp_m[MAX_SIZE][MAX_SIZE], aux_m[MAX_SIZE][MAX_SIZE];
+  double out[MAX_SIZE][MAX_SIZE], out2[MAX_SIZE][MAX_SIZE];
+  double temp_m[MAX_SIZE][MAX_SIZE], aux_m[MAX_SIZE][MAX_SIZE];
   m_ident(result, dim);
-  print_arr(result, 5, 5);
+//  print_arr(result, 5, 5);
   m_copy(m, temp_m, dim, dim);
   if(power == 0)
   {
@@ -615,32 +559,25 @@ void fast_m_pow(double m[MAX_SIZE][MAX_SIZE], int power, double result[MAX_SIZE]
     {
       if(power & 1)
       {
-    	printf("aqui!\n");
-    	print_arr(result, 5, 5);
         m_mlt(result, dim, dim, temp_m, dim, dim, out);
-        print_arr(out, 5, 5);
         m_copy(out, result, dim, dim);
         m_zero(out, dim, dim);
-        print_arr(result, 5, 5);
       }
-      printf("here2!\n");
-//      print_arr(m, 5, 5);
-//      m_copy(m, temp_m, dim, dim);
-//      print_arr(temp_m, 5, 5);
       m_mlt(temp_m, dim, dim, temp_m, dim, dim, out2);
-      print_arr(out2, 5, 5);
       m_copy(out2, temp_m, dim, dim);
-      print_arr(temp_m, 5, 5);
       m_zero(out2, dim, dim);
       power >>= 1;
     }
   }
 }
 
-/* smart_m_pow -- auxiliary function to compute integer powers of a square matrix M, M^n */
-void smart_m_pow(double m[MAX_SIZE][MAX_SIZE], int power, double result[MAX_SIZE][MAX_SIZE], int dim)
+/* smart_m_pow -- auxiliary function to compute integer powers of a
+ * square matrix M, M^n */
+void smart_m_pow(double m[MAX_SIZE][MAX_SIZE], int power,
+                 double result[MAX_SIZE][MAX_SIZE], int dim)
 {
-  double out[MAX_SIZE][MAX_SIZE], out2[MAX_SIZE][MAX_SIZE], temp_m[MAX_SIZE][MAX_SIZE];
+  double out[MAX_SIZE][MAX_SIZE], out2[MAX_SIZE][MAX_SIZE];
+  double temp_m[MAX_SIZE][MAX_SIZE];
   m_ident(result, dim);
   if(power == 0)
   {
@@ -650,7 +587,7 @@ void smart_m_pow(double m[MAX_SIZE][MAX_SIZE], int power, double result[MAX_SIZE
 	m_copy(m, result, dim, dim);
   else
   {
-    while(power>0)
+    while(power > 0)
     {
       if((power % 2) == 1)
       {
@@ -667,20 +604,15 @@ void smart_m_pow(double m[MAX_SIZE][MAX_SIZE], int power, double result[MAX_SIZE
 }
 
 /* m_pow -- computes integer powers of a square matrix A, A^p */
-#ifndef ANSI_C
-void m_pow(A, p, out, dim)
-double A[MAX_SIZE][MAX_SIZE], out[MAX_SIZE][MAX_SIZE];
-int	p, dim;
-#else
-MAT m_pow(double A[MAX_SIZE][MAX_SIZE], int p, double out[MAX_SIZE][MAX_SIZE], int dim)
-#endif
+void m_pow(double A[MAX_SIZE][MAX_SIZE], int p, double out[MAX_SIZE][MAX_SIZE],
+           int dim)
 {
   double tmp[MAX_SIZE][MAX_SIZE];
   if(p < 0)
   {
-	printf("we're actually here!\n");
+//	printf("we're actually here!\n");
     m_inverse(A, tmp, dim);
-    print_arr(tmp, dim, dim);
+//    print_arr(tmp, dim, dim);
     fast_m_pow(tmp, -p, out, dim);
   }
   else
@@ -690,51 +622,29 @@ MAT m_pow(double A[MAX_SIZE][MAX_SIZE], int p, double out[MAX_SIZE][MAX_SIZE], i
 }
 
 /* get_col -- gets a specified column of a matrix and retruns it as a vector */
-#ifndef ANSI_C
-void get_col(mat, m_dim, col, vec)
-unsigned int col;
-double mat[MAX_SIZE][MAX_SIZE];
-double vec[MAX_SIZE];
-#else
-void get_col(double mat[MAX_SIZE][MAX_SIZE], unsigned int m_dim, unsigned int col, double vec[MAX_SIZE])
-#endif
+void get_col(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim,
+             unsigned int col, double vec[MAX_SIZE])
 {
   unsigned int i;
-  for(i = 0; i < m_dim; i++)
+  for(i = 0; i < dim; i++)
     vec[i] = mat[i][col];
 }
 
 /* _in_prod -- inner product of two vectors from i0 downwards
    -- that is, returns a(i0:dim)^T.b(i0:dim) */
-#ifndef ANSI_C
-double _in_prod(a, a_dim, b, b_dim, i0)
-double a[MAX_SIZE], b[MAX_SIZE];
-unsigned int i0;
-int a_dim, b_dim;
-#else
-double _in_prod(double a[MAX_SIZE], int a_dim, double b[MAX_SIZE], int b_dim, unsigned int i0)
-#endif
+double _in_prod(double a[MAX_SIZE], double b[MAX_SIZE], int dim, unsigned int i0)
 {
-  unsigned int limit;
-  limit = min(a_dim, b_dim);
-  return __ip__(&(a[i0]), &(b[i0]), (int)(limit-i0));
+  return __ip__(&(a[i0]), &(b[i0]), (int)(dim-i0));
 }
 
 /* hhvec -- calculates Householder vector to eliminate all entries after the
    i0 entry of the vector vec. It is returned as out. May be in-situ */
-#ifndef ANSI_C
-void hhvec(vec, i0, beta, newval, out, dim)
-double vec[MAX_SIZE], out[MAX_SIZE];
-unsigned int i0;
-double beta, newval;
-int dim;
-#else
-void hhvec(double vec[MAX_SIZE], unsigned int i0, double beta, double newval, double out[MAX_SIZE],  int dim)
-#endif
+void hhvec(double vec[MAX_SIZE], unsigned int i0, double beta, double newval,
+           double out[MAX_SIZE],  int dim)
 {
   double norm, temp;
   v_copy(vec, out, dim);
-  temp = (double)_in_prod(out, dim, out, dim, i0);
+  temp = (double)_in_prod(out, out, dim, i0);
   norm = sp_sqrt(temp);
   if(norm <= 0.0)
   {
@@ -760,17 +670,9 @@ void hhvec(double vec[MAX_SIZE], unsigned int i0, double beta, double newval, do
     -- scratch vector w passed as argument
     -- raises error if w == NULL
 */
-#ifndef ANSI_C
-void _hhtrcols(M, i0, j0, hh, beta, w, out)
-double M[MAX_SIZE][MAX_SIZE], out[MAX_SIZE][MAX_SIZE];
-unsigned int i0, j0;
-double hh[MAX_SIZE];
-double	beta;
-double w[MAX_SIZE];
-#else
-void _hhtrcols(double M[MAX_SIZE][MAX_SIZE], int dim, unsigned int i0, unsigned int j0,
-               double hh[MAX_SIZE], double beta, double w[MAX_SIZE], double out[MAX_SIZE][MAX_SIZE])
-#endif
+void _hhtrcols(double M[MAX_SIZE][MAX_SIZE], int dim, unsigned int i0,
+               unsigned int j0, double hh[MAX_SIZE], double beta,
+               double w[MAX_SIZE], double out[MAX_SIZE][MAX_SIZE])
 {
   int i;
   m_copy(M, out, dim, dim);
@@ -796,17 +698,9 @@ void _hhtrcols(double M[MAX_SIZE][MAX_SIZE], int dim, unsigned int i0, unsigned 
 /* hhtrrows -- transform a matrix by a Householder vector by rows
     starting at row i0 from column j0 -- in-situ
     -- that is, M(i0:m,j0:n) <- M(i0:m,j0:n)(I-beta.hh(j0:n).hh(j0:n)^T) */
-#ifndef ANSI_C
-void hhtrrows(M, dim, i0, j0, hh, beta)
-double M[MAX_SIZE][MAX_SIZE];
-unsigned int i0, j0;
-double hh[MAX_SIZE];
-double beta;
-int dim;
-#else
-void hhtrrows(double M[MAX_SIZE][MAX_SIZE], int dim, unsigned int i0, unsigned int j0,
-              double hh[MAX_SIZE], double beta, double out[MAX_SIZE][MAX_SIZE])
-#endif
+void hhtrrows(double M[MAX_SIZE][MAX_SIZE], int dim, unsigned int i0,
+              unsigned int j0, double hh[MAX_SIZE], double beta,
+              double out[MAX_SIZE][MAX_SIZE])
 {
   double ip, scale;
   int i;
@@ -835,14 +729,8 @@ void hhtrrows(double M[MAX_SIZE][MAX_SIZE], int dim, unsigned int i0, unsigned i
 /* Hfactor -- compute Hessenberg factorization in compact form.
     -- factorization performed in situ
 */
-#ifndef ANSI_C
-void Hfactor(A, A_dim, diag, beta, out)
-double A[MAX_SIZE][MAX_SIZE], out[MAX_SIZE][MAX_SIZE];
-double diag[MAX_SIZE], beta[MAX_SIZE];
-int A_dim;
-#else
-void Hfactor(double A[MAX_SIZE][MAX_SIZE], int A_dim, double diag[MAX_SIZE], double beta[MAX_SIZE], double out[MAX_SIZE][MAX_SIZE])
-#endif
+void Hfactor(double A[MAX_SIZE][MAX_SIZE], int A_dim, double diag[MAX_SIZE],
+             double beta[MAX_SIZE], double out[MAX_SIZE][MAX_SIZE])
 {
   static double hh[MAX_SIZE], w[MAX_SIZE], hh_tmp[MAX_SIZE];
   int k, limit;
@@ -854,7 +742,7 @@ void Hfactor(double A[MAX_SIZE][MAX_SIZE], int A_dim, double diag[MAX_SIZE], dou
   {
     /* compute the Householder vector hh */
 	get_col(A_temp, (unsigned int)A_dim, (unsigned int)k, hh);
-	hhvec(hh, k+1, (beta[k]), (A[k+1][k]), hh_tmp, A_dim);
+	hhvec(hh, k+1, (beta[k]), (A_temp[k+1][k]), hh_tmp, A_dim);
 	v_zero(hh, A_dim);
 	v_copy(hh_tmp, hh, A_dim);
 	v_zero(hh_tmp, A_dim);
@@ -875,25 +763,21 @@ void Hfactor(double A[MAX_SIZE][MAX_SIZE], int A_dim, double diag[MAX_SIZE], dou
     hhtrrows(out2, A_dim, 0, k+1, hh, b, out);
     m_copy(out, A_temp, A_dim, A_dim);
     m_zero(out2, A_dim, A_dim);
+    m_zero(out, A_dim, A_dim);
+    v_zero(hh, A_dim);
   }
+  m_copy(A_temp, out, A_dim, A_dim);
 //  return (A);
 }
 
 /* hhtrvec -- apply Householder transformation to vector
     -- that is, out <- (I-beta.hh(i0:n).hh(i0:n)^T).in
     -- may be in-situ */
-#ifndef ANSI_C
-void hhtrvec(hh, dim, beta, i0, in, out)
-double hh[MAX_SIZE], in[MAX_SIZE], out[MAX_SIZE];	/* hh = Householder vector */
-unsigned int i0;
-double beta;
-int dim;
-#else
-void hhtrvec(double hh[MAX_SIZE], int dim, double beta, unsigned int i0, double in[MAX_SIZE], double out[MAX_SIZE])
-#endif
+void hhtrvec(double hh[MAX_SIZE], int dim, double beta, unsigned int i0,
+             double in[MAX_SIZE], double out[MAX_SIZE])
 {
   double scale, temp;
-  temp = (double)_in_prod(hh, dim, in, dim, i0);
+  temp = (double)_in_prod(hh, in, dim, i0);
   scale = beta*temp;
   v_copy(in, out, dim);
   __mltadd__(&(out[i0]), &(hh[i0]), -scale, (int)(dim - i0));
@@ -902,17 +786,12 @@ void hhtrvec(double hh[MAX_SIZE], int dim, double beta, unsigned int i0, double 
 
 /* makeHQ -- construct the Hessenberg orthogonalising matrix Q;
     -- i.e. Hess M = Q.M.Q'	*/
-#ifndef ANSI_C
-void makeHQ(H, dim, diag, beta, Qout)
-double H[MAX_SIZE][MAX_SIZE], Qout[MAX_SIZE][MAX_SIZE];
-double diag[MAX_SIZE], beta[MAX_SIZE];
-int dim;
-#else
-void makeHQ(double H[MAX_SIZE][MAX_SIZE], int dim, double diag[MAX_SIZE], double beta[MAX_SIZE], double Qout[MAX_SIZE][MAX_SIZE])
-#endif
+void makeHQ(double H[MAX_SIZE][MAX_SIZE], int dim, double diag[MAX_SIZE],
+            double beta[MAX_SIZE], double Qout[MAX_SIZE][MAX_SIZE])
 {
   int i, j, limit;
-  static double tmp1[MAX_SIZE], tmp2[MAX_SIZE], tmp3[MAX_SIZE];
+  double tmp1[MAX_SIZE], tmp2[MAX_SIZE], tmp3[MAX_SIZE];
+  double tmp4[MAX_SIZE][MAX_SIZE];
   limit = dim - 1;
   for(i = 0; i < dim; i++)
   {
@@ -930,19 +809,16 @@ void makeHQ(double H[MAX_SIZE][MAX_SIZE], int dim, double diag[MAX_SIZE], double
       v_zero(tmp3, dim);
     }
     /* insert into Qout */
-    set_col(Qout, (unsigned int)dim, (unsigned int)i, tmp1, (unsigned int)dim);
+    set_col(Qout, (unsigned int)dim, (unsigned int)i, tmp1, tmp4);
+    m_zero(Qout, dim, dim);
+    m_copy(tmp4, Qout, dim, dim);
+    m_zero(tmp4, dim, dim);
   }
 //  return (Qout);
 }
 
 /* makeH -- construct actual Hessenberg matrix */
-#ifndef ANSI_C
-void makeH(H, dim, Hout)
-double H[MAX_SIZE][MAX_SIZE], Hout[MAX_SIZE][MAX_SIZE];
-int dim;
-#else
 void makeH(double H[MAX_SIZE][MAX_SIZE], int dim, double Hout[MAX_SIZE][MAX_SIZE])
-#endif
 {
   int i, j, limit;
   m_copy(H, Hout, dim, dim);
@@ -953,16 +829,9 @@ void makeH(double H[MAX_SIZE][MAX_SIZE], int dim, double Hout[MAX_SIZE][MAX_SIZE
 //  return (Hout);
 }
 
-// TODO
 /* rot_cols -- postmultiply mat by givens rotation described by c, s */
-#ifndef ANSI_C
-void rot_cols(mat, dim, i, k, c, s, out)
-double mat[MAX_SIZE][MAX_SIZE], out[MAX_SIZE][MAX_SIZE];
-unsigned int i, k, dim;
-double c, s;
-#else
-void rot_cols(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i, unsigned int k, double c, double s, double out[MAX_SIZE][MAX_SIZE])
-#endif
+void rot_cols(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i,
+              unsigned int k, double c, double s, double out[MAX_SIZE][MAX_SIZE])
 {
   unsigned int j;
   double temp;
@@ -980,14 +849,8 @@ void rot_cols(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i, 
 }
 
 /* rot_rows -- pre-multiply mat by givens rotation described by c, s */
-#ifndef ANSI_C
-void rot_rows(mat, i, k, c, s)
-double mat[MAX_SIZE][MAX_SIZE], out[MAX_SIZE][MAX_SIZE];
-unsigned int i, k, dim;
-double c, s;
-#else
-void rot_rows(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i, unsigned int k, double c, double s, double out[MAX_SIZE][MAX_SIZE])
-#endif
+void rot_rows(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i,
+              unsigned int k, double c, double s, double out[MAX_SIZE][MAX_SIZE])
 {
   unsigned int j;
   double temp;
@@ -1005,14 +868,8 @@ void rot_rows(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i, 
 }
 
 /* hhldr3 -- computes */
-#ifndef ANSI_C
-static void hhldr3(x, y, z, nu1, beta, newval)
-double x, y, z;
-double *nu1, *beta, *newval;
-#else
 static void hhldr3(double x, double y, double z, double *nu1,
                    double *beta, double *newval)
-#endif
 {
   double alpha;
   if(x >= 0.0)
@@ -1025,15 +882,9 @@ static void hhldr3(double x, double y, double z, double *nu1,
 }
 
 /* hhldr3rows */
-#ifndef ANSI_C
-static void hhldr3rows(A, dim, k, i0, beta, nu1, nu2, nu3, A_temp)
-double A[MAX_SIZE][MAX_SIZE], A_temp[MAX_SIZE][MAX_SIZE];
-int	dim, k, i0;
-double beta, nu1, nu2, nu3;
-#else
-static void hhldr3rows(double A[MAX_SIZE][MAX_SIZE], int dim, int k, int i0, double beta,
-                       double nu1, double nu2, double nu3, double A_temp[MAX_SIZE][MAX_SIZE])
-#endif
+static void hhldr3rows(double A[MAX_SIZE][MAX_SIZE], int dim, int k, int i0,
+                       double beta, double nu1, double nu2, double nu3,
+                       double A_temp[MAX_SIZE][MAX_SIZE])
 {
   double ip, prod;
   int i;
@@ -1041,7 +892,8 @@ static void hhldr3rows(double A[MAX_SIZE][MAX_SIZE], int dim, int k, int i0, dou
   i0 = min(i0, dim-1);
   for(i = 0; i <= i0; i++)
   {
-    ip = nu1*m_entry(A_temp, dim, dim, i, k) + nu2*m_entry(A_temp, dim, dim, i, k+1)+nu3 * m_entry(A_temp, dim, dim, i, k+2);
+    ip = nu1*m_entry(A_temp, dim, dim, i, k) + \
+         nu2*m_entry(A_temp, dim, dim, i, k+1)+nu3 * m_entry(A_temp, dim, dim, i, k+2);
     prod = ip*beta;
     A_temp[i][k] += (-prod*nu1);
     A_temp[i][k+1] += (-prod*nu2);
@@ -1052,13 +904,7 @@ static void hhldr3rows(double A[MAX_SIZE][MAX_SIZE], int dim, int k, int i0, dou
 
 /* givens -- returns c,s parameters for Givens rotation to
        eliminate y in the vector [ x y ]' */
-#ifndef ANSI_C
-void givens(x, y, c, s)
-double x, y;
-double *c, *s;
-#else
 void givens(double x, double y, double *c, double *s)
-#endif
 {
   double norm;
   norm = sp_sqrt(x*x+y*y);
@@ -1077,20 +923,16 @@ void givens(double x, double y, double *c, double *s)
 /* schur -- computes the Schur decomposition of the matrix A in situ
     -- optionally, gives Q matrix such that Q^T.A.Q is upper triangular
     -- returns upper triangular Schur matrix */
-#ifndef ANSI_C
-void schur(A, Q)
-double A[MAX_SIZE][MAX_SIZE], Q[MAX_SIZE][MAX_SIZE];
-#else
-void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE], double A_out[MAX_SIZE][MAX_SIZE])
-#endif
+void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE],
+           double A_out[MAX_SIZE][MAX_SIZE])
 {
   int i, j, iter, k, k_min, k_max, k_tmp, n, split;
   double beta2, c, discrim, dummy, nu1, s, tmp, x, y, z;
-  double A_me[MAX_SIZE][MAX_SIZE], A_temp[MAX_SIZE][MAX_SIZE], Q_temp[MAX_SIZE][MAX_SIZE];
+  double A_me[MAX_SIZE][MAX_SIZE], A_temp[MAX_SIZE][MAX_SIZE];
+  double Q_temp[MAX_SIZE][MAX_SIZE];
   double sqrt_macheps;
   static double diag[MAX_SIZE], beta[MAX_SIZE];
   n = dim;
-
   /* compute Hessenberg form */
   Hfactor(A, dim, diag, beta, A_temp);
   /* save Q if necessary */
@@ -1121,10 +963,15 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE], 
         k_max = k;
         break;
       }
-
+      printf("test\n");
+      printf("k_max=%d\n", k_max);
+      printf("k_min=%d\n", k_min);
     if(k_max <= k_min)
     {
       k_min = k_max + 1;
+      printf("test2\n");
+      printf("k_max=%d\n", k_max);
+      printf("k_min=%d\n", k_min);
       continue;      /* outer loop */
     }
     /* check to see if we have a 2 x 2 block
@@ -1216,7 +1063,6 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE], 
       iter++;
       /* set up Wilkinson/Francis complex shift */
       k_tmp = k_max - 1;
-
       a00 = m_entry(A_out, dim, dim, k_tmp, k_tmp);
       a01 = m_entry(A_out, dim, dim, k_tmp, k_max);
       a10 = m_entry(A_out, dim, dim, k_max, k_tmp);
@@ -1323,6 +1169,8 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE], 
         }
 	}
   }
+  printf("test3\n");
+  printf("k_max=%d\n", k_max);
   /* polish up A by zeroing strictly lower triangular elements
      and small sub-diagonal elements */
   for(i = 0; i < dim; i++)
@@ -1339,13 +1187,8 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE], 
 	-- assumes T contains a block upper triangular matrix
 		as produced by schur()
 	-- real parts stored in real_pt, imaginary parts in imag_pt */
-#ifndef ANSI_C
-void schur_evals(T, real_pt, imag_pt)
-MAT *T;
-VEC *real_pt, *imag_pt;
-#else
-void schur_evals(double T[MAX_SIZE][MAX_SIZE], int dim, double real_pt[MAX_SIZE], double imag_pt[MAX_SIZE])
-#endif
+void schur_evals(double T[MAX_SIZE][MAX_SIZE], int dim, double real_pt[MAX_SIZE],
+                 double imag_pt[MAX_SIZE])
 {
   int i, j, n;
   double discrim, T_me[MAX_SIZE][MAX_SIZE];
@@ -1447,7 +1290,7 @@ int main() {
 	myA[3][0]=0;myA[3][1]=0;myA[3][2]=0.0000;myA[3][3]=-0.5000;myA[3][4]=1.0;
 	myA[4][0]=0;myA[4][1]=0;myA[4][2]=0;myA[4][3]=0;myA[4][4]=-0.5;
 
-//	double myT[MAX_SIZE][MAX_SIZE];
+	double myT[MAX_SIZE][MAX_SIZE];
 //	m_add(myA,myA,myT,5,5);
 //	double myS[MAX_SIZE][MAX_SIZE];
 //	m_sub(myA,myA,myS,5,5);
@@ -1483,12 +1326,20 @@ int main() {
 //	printf("\n");
 
     z = m_get_eigenvalues(myA, 5);
-//    int size = 5;
-//    for(int i = 0;i < size;i++)
-//    {
-//    //		printf("%f+%f i", z[i].real, z[i].imag);
-//      printfc(z[i]);
-//    }
+	  double T[MAX_SIZE][MAX_SIZE], Q[MAX_SIZE][MAX_SIZE];
+	  /* compute Schur form: A = Q.T.Q^T */
+//	  schur(myA, 5, Q, T);
+//	  double diag[MAX_SIZE], beta[MAX_SIZE];
+//	  Hfactor(myA, 5, diag, beta, myT);
+//	double evals_re[MAX_SIZE], evals_im[MAX_SIZE];
+//	  /* extract eigenvalues */
+//	  schur_evals(myA, 5, evals_re, evals_im);
+    int size = 5;
+    for(int i = 0;i < size;i++)
+    {
+//      printf("%f+%f i", z[i].real, z[i].imag);
+      printfc(z[i]);
+    }
 //	print_arr(myS,5,5);
 
 //	MAT T, Q;
