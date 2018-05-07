@@ -1664,6 +1664,7 @@ int main() {
 //    printf("Mp=%f e kp=%d\n", p.mp, p.kp);
     double tsr = 7*0.5;
     int res = check_settling_time(myA, myB, myC, myD, myX0, u, tsr, 5, 0.5, 5);
+    assert(res != 1);
 //    for(int i=0;i<5;i++){
 //    	printf("x(%d)=%f\n", i, xk.xk[i][0]);
 //    }
