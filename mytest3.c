@@ -337,38 +337,6 @@ void __mltadd__(double *dp1, const double *dp2, double s, int len)
     dp1[i] += s*dp2[i];
 }
 
-/* m_mlt -- matrix-matrix multiplication */
-void m_mlt(const double m1[MAX_SIZE][MAX_SIZE], int m1_m, int m1_n,
-           const double m2[MAX_SIZE][MAX_SIZE], int m2_m, int m2_n,
-           double m3[MAX_SIZE][MAX_SIZE])
-{
-  unsigned int i, j, k;
-  if(m1_n == m2_m)
-  {
-//    double mult;
-    // Checking if the multiplication is possible
-    // Initialising Matrix 3
-    // Calculating multiplication result
-    for(i = 0; i < m1_m; i++)
-    {
-      for(j = 0; j < m2_n; j++)
-      {
-        for(k = 0; k < m1_n; k++)
-        {
-//          mult = (m1[i][k] * m2[k][j]);
-          m3[i][j] = m3[i][j] + (m1[i][k] * m2[k][j]);
-        }
-      }
-    }
-  }
-  else
-  {
-    #ifdef DEBUG
-	printf("\nError! Operation invalid, please enter with valid matrices.\n");
-    #endif
-  }
-}
-
 /* m_copy -- copies matrix into new area
   	-- B <- A */
 void m_copy(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
@@ -384,15 +352,52 @@ void m_copy(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
   }
 }
 
-///* sm_mlt -- scalar-matrix multiply -- may be in-situ */
-//void sm_mlt(double scalar, double matrix[MAX_SIZE][MAX_SIZE],
-//            double out[MAX_SIZE][MAX_SIZE], int m, int n)
-//{
-//  unsigned int i, j;
-//  for(i = 0; i < m; i++)
-//    for (j = 0; j < n; j++)
-//      out[i][j] = scalar*matrix[i][j];
-//}
+/* m_mlt -- matrix-matrix multiplication */
+void m_mlt(double m1[MAX_SIZE][MAX_SIZE], int m1_m, int m1_n,
+           double m2[MAX_SIZE][MAX_SIZE], int m2_m, int m2_n,
+           double m3[MAX_SIZE][MAX_SIZE])
+{
+  unsigned int i, j, k;
+  double m4[MAX_SIZE][MAX_SIZE];
+  m_zero(m4, m1_m, m2_n);
+  m_zero(m3, m1_m, m2_n);
+  if(m1_n == m2_m)
+  {
+    double mult;
+    // Checking if the multiplication is possible
+    // Initialising Matrix 3
+    // Calculating multiplication result
+    for(i = 0; i < m1_m; i++)
+    {
+      for(j = 0; j < m2_n; j++)
+      {
+        for(k = 0; k < m1_n; k++)
+        {
+          mult = (m1[i][k] * m2[k][j]);
+          m4[i][j] = m4[i][j] + (m1[i][k] * m2[k][j]);
+        }
+      }
+    }
+    m_copy(m4, m3, m1_m, m2_n);
+  }
+  else
+  {
+    #ifdef DEBUG
+	printf("\nError! Operation invalid, please enter with valid matrices.\n");
+    #endif
+  }
+}
+
+
+/* sm_mlt -- scalar-matrix multiply -- may be in-situ */
+void sm_mlt(double scalar, double matrix[MAX_SIZE][MAX_SIZE],
+            double out[MAX_SIZE][MAX_SIZE], int m, int n)
+{
+  unsigned int i, j;
+  for(i = 0; i < m; i++)
+    for (j = 0; j < n; j++)
+      out[i][j] = scalar*matrix[i][j];
+}
 
 /* v_zero -- zero the vector x */
 void v_zero(double x[MAX_SIZE], int dim)
@@ -526,16 +531,16 @@ void m_ident(double A[MAX_SIZE][MAX_SIZE], int dim)
     A[i][i] = 1.0;
 }
 
-//void print_arr(double m[MAX_SIZE][MAX_SIZE], int row, int col)
-//{
-//  int i, j;
-//  for (i = 0; i < row; i++) {
-//    for (j = 0; j < col; j++) {
-//	  printf("%f ", m[i][j]);
-//    }
-//    printf("\n");
-//  }
-//}
+void print_arr(double m[MAX_SIZE][MAX_SIZE], int row, int col)
+{
+  int i, j;
+  for (i = 0; i < row; i++) {
+    for (j = 0; j < col; j++) {
+	  printf("%f ", m[i][j]);
+    }
+    printf("\n");
+  }
+}
 
 /* fast_m_pow -- auxiliary function to compute integer powers of a
  * square matrix M, M^n */
@@ -926,13 +931,14 @@ void givens(double x, double y, double *c, double *s)
 void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE],
            double A_out[MAX_SIZE][MAX_SIZE])
 {
-  int i, j, iter, k, k_min, k_max, k_tmp, n, split;
+  int i, j, iter, k, k_min, k_max, k_tmp, split;
   double beta2, c, discrim, dummy, nu1, s, tmp, x, y, z;
   double A_me[MAX_SIZE][MAX_SIZE], A_temp[MAX_SIZE][MAX_SIZE];
   double Q_temp[MAX_SIZE][MAX_SIZE];
   double sqrt_macheps;
   static double diag[MAX_SIZE], beta[MAX_SIZE];
-  n = dim;
+  double a00, a01, a10, a11;
+  double scale, t, numer, denom;
   /* compute Hessenberg form */
   Hfactor(A, dim, diag, beta, A_temp);
   /* save Q if necessary */
@@ -950,13 +956,11 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE],
 //    	A_me[i][j] = A_out[i][j];
 //    }
 //  }
-  double a00, a01, a10, a11;
-  double scale, t, numer, denom;
-  while(k_min < n)
+  while(k_min < dim)
   {
     /* find k_max to suit:
        submatrix k_min..k_max should be irreducible */
-    k_max = n-1;
+    k_max = dim-1;
     for(k = k_min; k < k_max; k++)
       if(m_entry(A_out, dim, dim, k+1, k) == 0.0)
       {
@@ -1122,7 +1126,7 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE],
         if(k < k_max - 1)
         {
           hhldr3(x, y, z, &nu1, &beta2, &dummy);
-          hhldr3rows(Q_temp, dim, k, n-1, beta2, nu1, y, z, A_temp);
+          hhldr3rows(Q_temp, dim, k, dim-1, beta2, nu1, y, z, A_temp);
           m_zero(Q_temp, dim, dim);
           m_copy(A_temp, Q_temp, dim, dim);
           m_zero(A_temp, dim, dim);
@@ -1249,13 +1253,308 @@ CMPLX *m_get_eigenvalues(double A[MAX_SIZE][MAX_SIZE], int dim)
   return z;
 }
 
+/* cmplx_mag -- get the magnitude of a complex number taking its real
+ * and imaginary parts */
+double cmplx_mag(double real, double imag)
+{
+  return sp_sqrt(real * real + imag * imag);
+}
+
+/* is_same_sign -- check if a has the same sign as b */
+int is_same_sign(double a, double b)
+{
+  if(((a >= 0) && (b >= 0)) || ((a <= 0) && (b <= 0)))
+    return 1;
+  else
+    return 0;
+}
+
+/* x_k -- computes the state signal in the k-th sample */
+void x_k(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE], int dim, double u, int k)
+{
+  double AUX[MAX_SIZE][MAX_SIZE], AUX2[MAX_SIZE][MAX_SIZE], AUX3[MAX_SIZE][MAX_SIZE];
+  if(xk.lastState == (k - 1))
+  {
+    m_mlt(A, dim, dim, xk.xk, dim, 1, AUX);
+    sm_mlt(u, B, AUX2, dim, 1);
+    m_add(AUX, AUX2, AUX3, dim, 1);
+    xk.lastState = k;
+//    m_zero(xk.xk, dim, 1);
+    m_copy(AUX3, xk.xk, dim, 1);
+//    xk.xk = AUX3;
+  }
+  for(int i=0;i<dim;i++){
+  	printf("x(%d)=%f\n", i, xk.xk[i][0]);
+  }
+}
+
+/* y_k2 -- computes the output signal in the k-th sample */
+double y_k2(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+            double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+            double u, int k, int dim)
+{
+  double Ak[MAX_SIZE][MAX_SIZE], AUX[MAX_SIZE][MAX_SIZE], AUX2[MAX_SIZE][MAX_SIZE];
+  double y, temp;
+  // y[k]=Cx[k]+Du[k]
+  x_k(A, B, dim, u, k);
+//  print_arr(C, 1, dim);
+//  print_arr(xk.xk, dim, 1);
+  m_mlt(C, 1, 5, xk.xk, 5, 1, AUX);
+  printf("AUX[0][0]=%f\n", AUX[0][0]);
+//  print_arr(AUX, 1, 1);
+  temp = D[0][0] * u;
+  y = AUX[0][0] + temp;
+  printf("D=%f\n", D[0][0]);
+  printf("u=%f\n", u);
+  printf("temp=%f\n", temp);
+  return y;
+}
+
+/* x_k2 -- computes the state signal in the k-th sample */
+void x_k2(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+         double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+         double u, int k, double X0[MAX_SIZE][MAX_SIZE], int dim,
+         double out[MAX_SIZE][MAX_SIZE])
+{
+  double x[MAX_SIZE][MAX_SIZE], Ak[MAX_SIZE][MAX_SIZE], AUX[MAX_SIZE][MAX_SIZE];
+  double AUX3[MAX_SIZE][MAX_SIZE], AUX4[MAX_SIZE][MAX_SIZE], x_tmp[MAX_SIZE][MAX_SIZE];
+  double AUX2[MAX_SIZE][MAX_SIZE], AUX5[MAX_SIZE][MAX_SIZE];
+  int m;
+  // y = C * A.pow(k) * X0;
+  m_pow(A, k, Ak, dim);
+  m_mlt(Ak, dim, dim, X0, dim, 1, x);
+  for(m = 0; m <= (k - 1); m++)
+  {
+    // y += (C * A.pow(k - m - 1) * B * u) + D * u;
+    m_pow(A, (k-m-1), Ak, dim);
+    m_mlt(Ak, dim, dim, B, dim, 1, AUX);
+    sm_mlt(u, AUX, AUX2, dim, 1);
+    m_add(x, AUX2, x_tmp, dim, 1);
+    m_zero(x, dim, 1);
+    m_copy(x_tmp, x, dim, 1);
+    m_zero(x_tmp, dim, 1);
+  }
+  xk.lastState = k;
+  m_copy(x, xk.xk, dim, 1);
+  m_copy(x, out, dim, 1);
+}
+
+/* y_k3 -- computes the output signal in the k-th sample */
+double y_k3(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+            double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+            double u, int k, double X0[MAX_SIZE][MAX_SIZE], int dim)
+{
+  double Ak[MAX_SIZE][MAX_SIZE], Xk[MAX_SIZE][MAX_SIZE];
+  double AUX[MAX_SIZE][MAX_SIZE], AUX2[MAX_SIZE][MAX_SIZE];
+  double y, temp;
+  x_k2(A, B, C, D, u, k, X0, dim, Xk);
+  // y[k]=Cx[k]+Du[k]
+//  x_k(A, B, u, k);
+  m_mlt(C, 1, dim, Xk, dim, 1, AUX);
+  sm_mlt(u, D, AUX2, 1, 1);
+  y = AUX[0][0] + AUX2[0][0];
+  return y;
+}
+
+/* y_k -- computes the output signal in the k-th sample */
+double y_k(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+           double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+           double u, int k, double X0[MAX_SIZE][MAX_SIZE], int dim)
+{
+  double y[MAX_SIZE][MAX_SIZE], Ak[MAX_SIZE][MAX_SIZE], AUX[MAX_SIZE][MAX_SIZE];
+  double AUX3[MAX_SIZE][MAX_SIZE], AUX4[MAX_SIZE][MAX_SIZE], y_tmp[MAX_SIZE][MAX_SIZE];
+  double AUX2[MAX_SIZE][MAX_SIZE], AUX5[MAX_SIZE][MAX_SIZE];
+  int m;
+  // y = C * A.pow(k) * X0;
+  m_pow(A, k, Ak, dim);
+  m_mlt(C, 1, dim, Ak, dim, dim, AUX);
+  m_mlt(AUX, 1, dim, X0, dim, 1, y);
+  for(m = 0; m <= (k - 1); m++)
+  {
+    // y += (C * A.pow(k - m - 1) * B * u) + D * u;
+    m_pow(A, (k-m-1), Ak, dim);
+    m_mlt(C, 1, dim, Ak, dim, dim, AUX);
+    m_mlt(AUX, 1, dim, B, dim, 1, AUX2);
+    m_add(AUX2, D, AUX5, 1, 1);
+    m_add(y, AUX5, y_tmp, 1, 1);
+    m_copy(y_tmp, y, 1, 1);
+    m_zero(y_tmp, 1, 1);
+  }
+  return y[0][0]*u;
+}
+
+/* y_ss -- computes steady-state output value of a given system */
+double y_ss(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+            double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+            double u, int dim)
+{
+  double yss;
+  double AUX[MAX_SIZE][MAX_SIZE], AUX2[MAX_SIZE][MAX_SIZE], AUX3[MAX_SIZE][MAX_SIZE];
+  double AUX4[MAX_SIZE][MAX_SIZE], AUX5[MAX_SIZE][MAX_SIZE], Id[MAX_SIZE][MAX_SIZE];
+  // get the expression y_ss=(C(I-A)^(-1)B+D)u
+  m_ident(Id, dim);
+  // Id - A
+  m_sub(Id, A, AUX, dim, dim);
+  m_inverse(AUX, AUX2, dim);
+  m_mlt(C, 1, dim, AUX2, dim, dim, AUX3);
+  m_mlt(AUX3, 1, dim, B, dim, 1, AUX4);
+  m_add(AUX4, D, AUX5, 1, 1);
+  yss = AUX5[0][0] * u;
+  return yss;
+}
+
+/* peak_output -- computes the biggest peak value of a signal (Mp) */
+PKVL peak_output(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+                 double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+                 double X0[MAX_SIZE][MAX_SIZE], double yss, double u, int dim)
+{
+  PKVL out;
+  double greater, cmp, o;
+  int i = 0, j=0;
+  greater = sp_fabs(y_k2(A, B, C, D, u, i, dim));
+  o = y_k2(A, B, C, D, u, i+1, dim);
+  cmp = sp_fabs(o);
+//  printf("greater=%f\n", y_k2(A, B, C, D, u, 1, dim));
+  while((cmp >= greater))
+  {
+    printf("(%f >= %f)\n", cmp, greater);
+    if(greater < cmp)
+    {
+      printf("(%f < %f)\n", greater, cmp);
+      greater = cmp;
+      out.mp = o;
+      out.kp = i+2;
+//      printf("greater1=%f\n", y_k2(A, B, C, D, u, i+1, dim));
+      j++;
+    }
+    else
+    {
+      out.mp = o;
+      out.kp = i+2;
+//      printf("greater2=%f\n", y_k2(A, B, C, D, u, i+1, dim));
+      j++;
+    }
+    if(!is_same_sign(yss, out.mp))
+    {
+      greater = 0;
+    }
+    i++;
+    o = y_k2(A, B, C, D, u, i+1, dim);
+    cmp = sp_fabs(o);
+  }
+  printf("j=%d\n", j);
+  return out;
+}
+
+/* c_bar -- computes an auxiliary variable to calculate k_bar */
+double c_bar(double mp, double yss, double lambmax, int kp)
+{
+  double cbar;
+  cbar = (mp-yss)/(sp_pow(lambmax, kp));
+  return cbar;
+}
+
+/* log_b -- computes the log of x in the base 'base' */
+double log_b(double base, double x)
+{
+  return (double) (sp_log10_2(x) / sp_log10_2(base));
+}
+
+/* k_bar -- computes instant in which the system enters in the settling
+ * -time region */
+int k_bar(double lambdaMax, double p, double cbar, double yss, int order)
+{
+  double k_ss, x;
+  x = (p * yss) / (100 * cbar);
+  k_ss = log_b(lambdaMax, x);
+  return sp_ceil(k_ss)+order;
+}
+
+/* max_mag_eigenvalue -- computes biggest magnitude among the eigenvalues */
+double max_mag_eigenvalue(double A[MAX_SIZE][MAX_SIZE], int dim)
+{
+  double maximum = 0, aux;
+  CMPLX *z;
+  int i;
+  z = m_get_eigenvalues(A, dim);
+  for(i = 0; i < dim; i++)
+  {
+    aux = cmplx_mag(z[i].real, z[i].imag);
+    if(aux > maximum)
+    {
+      maximum = aux;
+    }
+  }
+  return maximum;
+}
+
+/* check_settling_time -- check if a given settling time satisfies to
+ * a given system */
+int check_settling_time(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
+                        double C[MAX_SIZE][MAX_SIZE], double D[MAX_SIZE][MAX_SIZE],
+                        double X0[MAX_SIZE][MAX_SIZE], double u, double tsr,
+                        double p, double ts, int dim)
+{
+  double yss, mp, lambMax, cbar, output, inf, sup;
+  PKVL out;
+  int kbar, kp, i;
+//  xk.xk = m_get(A.m, 1);
+  xk.lastState = 0;
+  yss = y_ss(A, B, C, D, u, dim);
+  out = peak_output(A, B, C, D, X0, yss, u, dim);
+  mp = out.mp;
+  kp = out.kp;
+  lambMax = max_mag_eigenvalue(A, dim);
+  cbar = c_bar(mp, yss, lambMax, kp);
+  kbar = k_bar(lambMax, p, cbar, yss, dim);
+  #ifdef DEBUG
+  printf("Mp=%f\n", mp);
+  printf("yss=%f\n", yss);
+  printf("lambMax=%f\n", lambMax);
+  printf("kp=%d\n", kp);
+  printf("cbar=%f\n", cbar);
+  #endif
+  if(kbar * ts < tsr)
+  {
+    #ifdef DEBUG
+    printf("kbar=%d\n", kbar);
+    #endif
+    return 1;
+  }
+  i = (int)sp_ceil(tsr / ts)-1;
+  output = y_k3(A, B, C, D, u, i, X0, dim);
+  while(i <= kbar)
+  {
+    if(yss > 0)
+    {
+      inf = (yss - (yss * (p/100)));
+      sup = (yss * (p/100) + yss);
+    }
+    else
+    {
+      sup = (yss - (yss * (p/100)));
+      inf = (yss * (p/100) + yss);
+    }
+    if(!(output < sup && (output > inf)))
+    {
+      #ifdef DEBUG
+      printf("kbar=%d\n", kbar);
+      #endif
+      return 0;
+    }
+    i++;
+    output = y_k2(A, B, C, D, u, i, dim);
+  }
+  return 1;
+}
+
 int main() {
 //	MAT A, B, C, D, X0;
 	CMPLX *z;
 //	CMPLX my_z[MAX_SIZE];
 //	double u, tsr, p, ts;
 //	int res;
-//	u = 1.0;
+	double u = 1.0;
 //	ts = 0.5;
 //	p = 5;
 //
@@ -1288,9 +1587,24 @@ int main() {
 	myA[1][0]=0.0000;myA[1][1]=-0.5000;myA[1][2]=1.0;myA[1][3]=0;myA[1][4]=0;
 	myA[2][0]=0;myA[2][1]=0;myA[2][2]=-0.5000;myA[2][3]=1.0000;myA[2][4]=0;
 	myA[3][0]=0;myA[3][1]=0;myA[3][2]=0.0000;myA[3][3]=-0.5000;myA[3][4]=1.0;
-	myA[4][0]=0;myA[4][1]=0;myA[4][2]=0;myA[4][3]=0;myA[4][4]=-0.5;
+	myA[4][0]=0;myA[4][1]=0;myA[4][2]=0;myA[4][3]=0;myA[4][4]=-0.5000;
 
-	double myT[MAX_SIZE][MAX_SIZE];
+	double myB[MAX_SIZE][MAX_SIZE];
+	myB[0][0]=-0.4;
+	myB[1][0]=-0.6;
+	myB[2][0]=5.5;
+	myB[3][0]=1;
+	myB[4][0]=-0.3;
+
+	double myC[MAX_SIZE][MAX_SIZE];
+	myC[0][0]=0;myC[0][1]=2.6;myC[0][2]=0.5;myC[0][3]=1.2;myC[0][4]=0;
+
+	double myD[MAX_SIZE][MAX_SIZE];
+	m_zero(myD, 1, 1);
+
+	double myX0[MAX_SIZE][MAX_SIZE];
+
+//	double myT[MAX_SIZE][MAX_SIZE];
 //	m_add(myA,myA,myT,5,5);
 //	double myS[MAX_SIZE][MAX_SIZE];
 //	m_sub(myA,myA,myS,5,5);
@@ -1325,8 +1639,8 @@ int main() {
 //	}
 //	printf("\n");
 
-    z = m_get_eigenvalues(myA, 5);
-	  double T[MAX_SIZE][MAX_SIZE], Q[MAX_SIZE][MAX_SIZE];
+//    z = m_get_eigenvalues(myA, 5);
+//	  double T[MAX_SIZE][MAX_SIZE], Q[MAX_SIZE][MAX_SIZE];
 	  /* compute Schur form: A = Q.T.Q^T */
 //	  schur(myA, 5, Q, T);
 //	  double diag[MAX_SIZE], beta[MAX_SIZE];
@@ -1334,45 +1648,24 @@ int main() {
 //	double evals_re[MAX_SIZE], evals_im[MAX_SIZE];
 //	  /* extract eigenvalues */
 //	  schur_evals(myA, 5, evals_re, evals_im);
-    int size = 5;
-    for(int i = 0;i < size;i++)
-    {
-//      printf("%f+%f i", z[i].real, z[i].imag);
-      printfc(z[i]);
-    }
+//    int size = 5;
+//    for(int i = 0;i < size;i++)
+//    {
+////      printf("%f+%f i", z[i].real, z[i].imag);
+////      printfc(z[i]);
+////      assert(z[i].real==-0.5);
+//    	assert(-0.5==-0.5);
+//    }
 //	print_arr(myS,5,5);
-
-//	MAT T, Q;
-//	static VEC diag, beta;
-//	VEC evals_re, evals_im;
-//	Q = m_get(A.m, A.n);
-//	T = m_copy(A);
-////	T = schur(T, Q);
-//	diag = v_get(A.n);
-//	beta = v_get(A.n);
-//	A = Hfactor(A, diag, beta);
-//	evals_re = v_get(A.m);
-//	evals_im = v_get(A.m);
-
-//	static VEC hh, w;
-//	VEC diag = v_get(5);
-//	VEC beta = v_get(A.m);
-//	int k=0, limit;
-//	double b, temp;
-//	limit = A.m - 1;
-//	hh = v_get(A.m);
-//	w  = v_get(A.n);
-//
-//	hh = get_col(A, (unsigned int)k);
-////	hh = hhvec(hh, k+1, (beta.ve[k]), (A.me[k+1][k]));
-//	temp = (double)_in_prod(hh, hh, k+1);
-////	schur_evals(&T, &evals_re, &evals_im);
-//
-//	assert(sp_fabs(-5) == 5);
-//	printf("ceil(%f)=%f\n", 5.89, sp_ceil(5.89));
-//	assert(sp_ceil(5.89) == 6.0);
-//	assert(sp_floor(4.3) == 4);
-//	assert(sp_pow(2, 2) == 4);
-//	assert(sp_sqrt(4) == 2);
+//    double yss = y_ss(myA, myB, myC, myD, u, 5);
+//    printf("yss = %f\n", yss);
+//    assert(yss!=yss);
+//    PKVL p = peak_output(myA, myB, myC, myD, myX0, yss, u, 5);
+//    printf("Mp=%f e kp=%d\n", p.mp, p.kp);
+    double tsr = 7*0.5;
+    int res = check_settling_time(myA, myB, myC, myD, myX0, u, tsr, 5, 0.5, 5);
+//    for(int i=0;i<5;i++){
+//    	printf("x(%d)=%f\n", i, xk.xk[i][0]);
+//    }
 	return 0;
 }

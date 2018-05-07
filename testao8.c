@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+//#include "seahorn/seahorn.h"
 
 #define MAX_SIZE 10
 
@@ -86,7 +87,6 @@ LST;
 // xk stores the last computed state of the system
 LST xk;
 
-
 /******************************math.h Functions******************************/
 
 /* sp_fabs -- absolute value of floating-point number */
@@ -105,7 +105,7 @@ double sp_ceil(double x)
   {
     float f;
     int i;
-  } float_int;
+  }float_int;
   float_int.f = x;
   // Extract sign, exponent and mantissa
   // Bias is removed from exponent
@@ -162,7 +162,6 @@ double sp_ceil(double x)
 double sp_pow(double a, int n)
 {
   double r = 1;
-
   while(n > 0)
   {
     if(n & 1)
@@ -234,13 +233,15 @@ double sp_log10_2(double x)
 /* sp_floor -- returns the largest integer value less than or equal to num */
 double sp_floor(double num)
 {
-  if (num >= 9.2234e+18 || num <= -9.2234e+18 || num != num)
+  long long n;
+  double d;
+  if(num >= 9.2234e+18 || num <= -9.2234e+18 || num != num)
   {
   /* handle large values, infinities and nan */
     return num;
   }
-  long long n = (long long)num;
-  double d = (double)n;
+  n = (long long)num;
+  d = (double)n;
   if (d == num || num >= 0)
     return d;
   else
@@ -255,7 +256,7 @@ double sp_sqrt(const double fg)
   while(n != lstX)
   {
     lstX = n;
-     n = (n + fg/n) / 2.0;
+    n = (n + fg/n) / 2.0;
   }
   return n;
 }
@@ -270,9 +271,9 @@ MAT m_get(int m, int n)
   A.m = m;A.n = n;
   A.max_m = m;A.max_n = n;
   A.max_size = A.max_m * A.max_n;
-  for(i = 0;i < m;i++)
+  for(i = 0; i < m; i++)
   {
-    for(j = 0;j < n;j++)
+    for(j = 0; j < n; j++)
     {
       A.me[i][j] = 0;
     }
@@ -293,7 +294,7 @@ MAT m_add(MAT mat1, MAT mat2)
   mat1_m = mat1.m; mat1_n = mat1.n;
   mat2_m = mat2.m; mat2_n = mat2.n;
   out = m_get(mat1_m, mat1_n);
-  for(i=0; i<mat1_m; i++)
+  for(i = 0; i < mat1_m; i++)
   {
     for(j = 0; j < mat1_n; j++)
 	  out.me[i][j] = mat1.me[i][j] + mat2.me[i][j];
@@ -311,12 +312,14 @@ MAT m_sub(MAT mat1, MAT mat2)
 {
   MAT out;
   unsigned int i, j, mat1_m, mat1_n, mat2_m, mat2_n;
-  mat1_m = mat1.m; mat1_n = mat1.n;
-  mat2_m = mat2.m; mat2_n = mat2.n;
+  mat1_m = mat1.m;
+  mat1_n = mat1.n;
+  mat2_m = mat2.m;
+  mat2_n = mat2.n;
   out = m_get(mat1_m, mat1_n);
-  for(i=0; i < mat1_m;i++)
+  for(i = 0; i < mat1_m; i++)
   {
-    for(j = 0;j < mat1_n;j++)
+    for(j = 0;j < mat1_n; j++)
 	  out.me[i][j] = mat1.me[i][j] - mat2.me[i][j];
   }
   return (out);
@@ -334,7 +337,7 @@ MAT m_zero(int m, int n)
   int i, j, A_m, A_n;
   A = m_get(m, n);
   A_m = A.m; A_n = A.n;
-  for(i = 0; i < A_m;i++)
+  for(i = 0; i < A_m; i++)
     for(j = 0; j <A_n; j++)
       A.me[i][j] = 0.0;
   return A;
@@ -379,10 +382,13 @@ MAT m_mlt(const MAT m1, const MAT m2)
   MAT m3;
   unsigned int i1, j1, i2, j2;
   unsigned int i, j, k;
-  i1 = m1.m; j1 = m1.n; i2 = m2.m; j2 = m2.n;
+  i1 = m1.m;
+  j1 = m1.n;
+  i2 = m2.m;
+  j2 = m2.n;
   if(j1 == i2)
   {
-    // Checking if the multiplication is possible
+//     Checking if the multiplication is possible
     // Initialising Matrix 3
     m3 = m_get(i1, j2);
     // Calculating multiplication result
@@ -413,10 +419,6 @@ MAT m_copy(MAT A)
 {
   MAT B = m_get(A.m, A.n);
   int i, j;
-//  B.m = A.m;
-//  B.max_m = A.max_m;
-//  B.max_n = A.max_n;
-//  B.max_size = A.max_size;
   for(i = 0; i < A.m; i++)
   {
     for(j = 0; j < A.n; j++)
@@ -424,8 +426,6 @@ MAT m_copy(MAT A)
       B.me[i][j] = A.me[i][j];
 	}
   }
-//  memcpy(B.me, A.me, MAX_SIZE*MAX_SIZE*8);
-//  B.n = A.n;
   return B;
 }
 
@@ -440,10 +440,11 @@ MAT	sm_mlt(double scalar, const MAT matrix)
 {
   MAT out;
   unsigned int	m, n, i, j;
-  m = matrix.m;	n = matrix.n;
+  m = matrix.m;
+  n = matrix.n;
   out = m_get(m, n);
-  for( i=0; i<m; i++ )
-    for ( j=0; j<n; j++ )
+  for(i = 0; i<m; i++)
+    for (j = 0; j<n; j++)
       out.me[i][j] = scalar*matrix.me[i][j];
   return (out);
 }
@@ -459,9 +460,9 @@ MAT m_mlt_scalar(const MAT m1, const double scalar)
 {
   MAT m2 = m_copy(m1);
   int i, j;
-  for(i = 0;i < m1.m;i++)
+  for(i = 0;i < m1.m; i++)
   {
-    for(j = 0;i < m1.n;j++)
+    for(j = 0;i < m1.n; j++)
     {
       m2.me[i][j] = scalar * m1.me[i][j];
     }
@@ -551,11 +552,8 @@ VEC v_copy(const VEC A)
 {
   VEC B = v_get(A.dim);
   int i;
-//  B.dim = A.dim;
-//  B.max_dim = A.max_dim;
   for(i = 0; i < A.dim; i++)
     B.ve[i] = A.ve[i];
-//  memcpy(B.ve, A.ve, MAX_SIZE*8);
   return B;
 }
 
@@ -715,7 +713,6 @@ MAT m_pow(const MAT A, int p)
 {
   MAT out;
   static MAT wkspace, tmp;
-
   wkspace = m_get(A.m, A.n);
   out = m_get(A.m, A.n);
   if(p < 0)
@@ -891,8 +888,6 @@ MAT Hfactor(MAT A, VEC diag, VEC beta)
 	{
 	  diag.ve[k] = 0;
 	}
-//    diag.ve[k] = (((k+1)>=0 && (k+1)<(hh).dim) ? (hh).ve[(k+1)] : \
-//        0);
     /* apply Householder operation symmetrically to A */
 	if((k >= 0) && (k < beta.dim))
 	{
@@ -996,10 +991,6 @@ MAT rot_cols(const MAT mat, unsigned int i, unsigned int k, double c, double s)
   for(j = 0; j < mat.m; j++)
   {
     temp = c*m_entry(out, j, i) + s*m_entry(out, j, k);
-//    out.me[j][k] = (-s*(((j)<(out).m && (i)<=(out).n) ? \
-//        (out).me[(j)][(i)] : (printf("Error!"))) +
-//    	c*(((j)<(out).m && (k)<=(out).n) ? \
-//        (out).me[(j)][(k)] : (printf("Error!"))));
     out.me[j][k] = (-s*(((j)<(out).m && (i)<=(out).n) ? \
             (out).me[(j)][(i)] : (0)) +
         	c*(((j)<(out).m && (k)<=(out).n) ? \
@@ -1009,7 +1000,7 @@ MAT rot_cols(const MAT mat, unsigned int i, unsigned int k, double c, double s)
   return (out);
 }
 
-/* rot_rows -- premultiply mat by givens rotation described by c, s */
+/* rot_rows -- pre-multiply mat by givens rotation described by c, s */
 #ifndef ANSI_C
 MAT rot_rows(mat, i, k, c, s)
 MAT mat;
@@ -1105,7 +1096,7 @@ void givens(double x, double y, double *c, double *s)
   }
 }
 
-/* schur -- computes the Schur decomposition of the matrix A in situ
+/* Schur -- computes the Schur decomposition of the matrix A in situ
     -- optionally, gives Q matrix such that Q^T.A.Q is upper triangular
     -- returns upper triangular Schur matrix */
 #ifndef ANSI_C
@@ -1363,7 +1354,6 @@ void schur_evals(MAT *T, VEC *real_pt, VEC *imag_pt)
   double discrim, T_me[MAX_SIZE][MAX_SIZE];
   double diff, sum, tmp;
   n = T->n;
-//  memcpy(T_me, T->me, MAX_SIZE*MAX_SIZE*8);
   for(i = 0; i < T->m; i++)
   {
     for(j = 0; j < T->n; j++)
@@ -1459,6 +1449,11 @@ void x_k(MAT A, MAT B, double u, int k)
     xk.lastState = k;
     xk.xk = AUX3;
   }
+  else
+      printf("error!\n");
+  for(int i=0;i<A.m;i++){
+  	printf("x(%d)=%f\n", i, xk.xk.me[i][0]);
+  }
 }
 
 /* y_k2 -- computes the output signal in the k-th sample */
@@ -1470,8 +1465,12 @@ double y_k2(MAT A, MAT B, MAT C, MAT D, double u, int k)
   AUX = m_get(C.m, xk.xk.n);
   x_k(A, B, u, k);
   AUX = m_mlt(C, xk.xk);
+  printf("AUX[0][0]=%f\n", AUX.me[0][0]);
   temp = D.me[0][0] * u;
   y = AUX.me[0][0] + temp;
+  printf("D=%f\n", D.me[0][0]);
+  printf("u=%f\n", u);
+  printf("temp=%f\n", temp);
   return y;
 }
 
@@ -1548,29 +1547,66 @@ double y_k(MAT A, MAT B, MAT C, MAT D, double u, int k, MAT X0)
 PKVL peak_output(MAT A, MAT B, MAT C, MAT D, MAT X0, double yss, double u)
 {
   PKVL out;
-  double greater;
-  int i = 0;
+  double greater, cmp, o;
+  int i = 0, j=0;
+//  greater = sp_fabs(y_k2(A, B, C, D, u, i));
+//  while((sp_fabs(y_k2(A, B, C, D, u, i+1)) >= greater))
+//  {
+//	printf("(%f >= %f)\n", sp_fabs(y_k2(A, B, C, D, u, i+1)), greater);
+//    if(greater < sp_fabs(y_k2(A, B, C, D, u, i+1)))
+//    {
+//      greater = sp_fabs(y_k2(A, B, C, D, u, i+1));
+//      out.mp = y_k2(A, B, C, D, u, i+1);
+//      out.kp = i+2;
+//      j++;
+//    }
+//    else
+//    {
+//      out.mp = y_k2(A, B, C, D, u, i+1);
+//      out.kp = i+2;
+//      j++;
+//    }
+//    if(!is_same_sign(yss, out.mp))
+//    {
+//      greater = 0;
+//    }
+//    i++;
+//  }
+//  printf("j=%d\n", j);
+//  return out;
   greater = sp_fabs(y_k2(A, B, C, D, u, i));
-  while((sp_fabs(y_k2(A, B, C, D, u, i+1)) >= greater))
-  {
-    if(greater < sp_fabs(y_k2(A, B, C, D, u, i+1)))
+    o = y_k2(A, B, C, D, u, i+1);
+    cmp = sp_fabs(o);
+  //  printf("greater=%f\n", y_k2(A, B, C, D, u, 1, dim));
+    while((cmp >= greater))
     {
-      greater = sp_fabs(y_k2(A, B, C, D, u, i+1));
-      out.mp = y_k2(A, B, C, D, u, i+1);
-      out.kp = i+2;
+      printf("(%f >= %f)\n", cmp, greater);
+      if(greater < cmp)
+      {
+        printf("(%f < %f)\n", greater, cmp);
+        greater = cmp;
+        out.mp = o;
+        out.kp = i+2;
+  //      printf("greater1=%f\n", y_k2(A, B, C, D, u, i+1, dim));
+        j++;
+      }
+      else
+      {
+        out.mp = o;
+        out.kp = i+2;
+  //      printf("greater2=%f\n", y_k2(A, B, C, D, u, i+1, dim));
+        j++;
+      }
+      if(!is_same_sign(yss, out.mp))
+      {
+        greater = 0;
+      }
+      i++;
+      o = y_k2(A, B, C, D, u, i+1);
+      cmp = sp_fabs(o);
     }
-    else
-    {
-      out.mp = y_k2(A, B, C, D, u, i+1);
-      out.kp = i+2;
-    }
-    if(!is_same_sign(yss, out.mp))
-    {
-      greater = 0;
-    }
-    i++;
-  }
-  return out;
+    printf("j=%d\n", j);
+    return out;
 }
 
 /* y_ss -- computes steady-state output value of a given system */
@@ -1723,21 +1759,21 @@ int main(){
     A.me[1][0]=0.0000;A.me[1][1]=-0.5000;A.me[1][2]=1.0;A.me[1][3]=0;A.me[1][4]=0;
     A.me[2][0]=0;A.me[2][1]=0;A.me[2][2]=-0.5000;A.me[2][3]=1.0000;A.me[2][4]=0;
     A.me[3][0]=0;A.me[3][1]=0;A.me[3][2]=0.0000;A.me[3][3]=-0.5000;A.me[3][4]=1.0;
-    A.me[4][0]=0;A.me[4][1]=0;A.me[4][2]=0;A.me[4][3]=0;A.me[4][4]=-0.5;printf("A ");
-    m_output(A);
-    printf("A+A ");m_output(m_add(A, A));
-    printf("A-A ");m_output(m_sub(A, A));
-    printf("A*A=\n");m_output(m_mlt(A, A));
-    printf("inv(A)=\n");m_output(m_inverse(A));
-    printf("m_pow(A, -2)=\n");m_output(m_pow(A, -2));
-    printf("m_pow(A, -1)=\n");m_output(m_pow(A, -1));
-    printf("m_pow0(A, 0)=\n");m_output(m_pow(A, 0));
-    printf("m_pow1(A, 1)=\n");m_output(m_pow(A, 1));
-    printf("m_pow2(A, 2)=\n");m_output(m_pow(A, 2));
-    printf("m_pow3(A, 3)=\n");m_output(m_pow(A, 3));
-    printf("m_pow4(A, 4)=\n");m_output(m_pow(A, 4));
-    printf("m_pow5(A, 5)=\n");m_output(m_pow(A, 5));
-    printf("m_pow6(A, 6)=\n");m_output(m_pow(A, 6));
+    A.me[4][0]=0;A.me[4][1]=0;A.me[4][2]=0;A.me[4][3]=0;A.me[4][4]=-0.5;
+//    printf("A ");m_output(A);
+//    printf("A+A ");m_output(m_add(A, A));
+//    printf("A-A ");m_output(m_sub(A, A));
+//    printf("A*A=\n");m_output(m_mlt(A, A));
+//    printf("inv(A)=\n");m_output(m_inverse(A));
+//    printf("m_pow(A, -2)=\n");m_output(m_pow(A, -2));
+//    printf("m_pow(A, -1)=\n");m_output(m_pow(A, -1));
+//    printf("m_pow0(A, 0)=\n");m_output(m_pow(A, 0));
+//    printf("m_pow1(A, 1)=\n");m_output(m_pow(A, 1));
+//    printf("m_pow2(A, 2)=\n");m_output(m_pow(A, 2));
+//    printf("m_pow3(A, 3)=\n");m_output(m_pow(A, 3));
+//    printf("m_pow4(A, 4)=\n");m_output(m_pow(A, 4));
+//    printf("m_pow5(A, 5)=\n");m_output(m_pow(A, 5));
+//    printf("m_pow6(A, 6)=\n");m_output(m_pow(A, 6));
 
     //setting up B matrix
 //    B=m_get(2,1);
@@ -1749,11 +1785,12 @@ int main(){
 //    B->me[2][0]=2.5;
 //    B->me[3][0]=1.6;printf("B ");m_output(B);
     B = m_get(5,1);
-    B.me[0][0]=0;
-    B.me[1][0]=0;
-    B.me[2][0]=2.5;
+    B.me[0][0]=-0.4;
+    B.me[1][0]=-0.6;
+    B.me[2][0]=5.5;
     B.me[3][0]=1;
-    B.me[4][0]=0;printf("B ");m_output(B);
+    B.me[4][0]=-0.3;
+//    printf("B ");m_output(B);
     //setting up C matrix
 //    C=m_get(1,2);
 //    C->me[0][0]=0;C->me[0][1]=2.6;
@@ -1763,10 +1800,10 @@ int main(){
 //    printf("C ");m_output(C);
     C = m_get(1,5);
     C.me[0][0]=0;C.me[0][1]=2.6;C.me[0][2]=0.5;C.me[0][3]=1.2;C.me[0][4]=0;
-    printf("C ");m_output(C);
+//    printf("C ");m_output(C);
     //setting up D matrix
     D=m_get(1,1);
-    m_zero(D.m, D.n);printf("D ");m_output(D);
+//    m_zero(D.m, D.n);printf("D ");m_output(D);
 //    D->me[0][0] = 0;printf("D ");m_output(D);
 
 //    X0=m_get(2,1);
@@ -1774,30 +1811,35 @@ int main(){
 //    X0=m_get(4,1);
 //    m_zero(X0.m, X0.n);printf("X0 ");m_output(X0);
     X0=m_get(5,1);
-    m_zero(X0.m, X0.n);printf("X0 ");m_output(X0);
-    printf("-----------------------------------------------------------\n");
+//    m_zero(X0.m, X0.n);printf("X0 ");m_output(X0);
+//    printf("-----------------------------------------------------------\n");
 
     xk.xk = m_get(A.m, 1);
 
-    z = m_get_eigenvalues(A);
-    int size = A.m, s = A.m;
-    for(int i = 0;i < size;i++)
-    {
-    //		printf("%f+%f i", z[i].real, z[i].imag);
-      printfc(z[i]);
-    }
-    double lambmax = max_mag_eigenvalue(A);
-    printf("Maximum:%f\n", lambmax);
+//    z = m_get_eigenvalues(A);
+//    int size = A.m, s = A.m;
+//    for(int i = 0;i < size;i++)
+//    {
+//    //		printf("%f+%f i", z[i].real, z[i].imag);
+//      printfc(z[i]);
+//    }
+//    double lambmax = max_mag_eigenvalue(A);
+//    printf("Maximum:%f\n", lambmax);
 
-//    PKVL out;
-//    double yss = y_ss(A, B, C, D, 1.0);
-//    out = peak_output(A, B, C, D, X0, yss, 1.0);
-//    double mp = out.mp;
-//    int kp = out.kp;
-//    int d = 2;
+    PKVL out;
+    double yss = y_ss(A, B, C, D, 1.0);
+    printf("yss = %f\n", yss);
+    out = peak_output(A, B, C, D, X0, yss, 1.0);
+    double mp = out.mp;
+    int kp = out.kp;
+    int d = 2;
 //    printf("y(%d)=%f\n", d, y_k2(A,B,C,D,1.0,d));
-//    printf("Mp=%f\n", mp);
-//    printf("kp=%d\n", out.kp);
+    printf("Mp=%f e ", mp);
+    printf("kp=%d\n", out.kp);
+//    printf("m=%d e n=%d\n", xk.xk.m, xk.xk.n);
+//    for(int i=0;i<5;i++){
+//      printf("x(%d)=%f\n", i, xk.xk.me[i][0]);
+//    }
 //    double cbar = c_bar(mp, yss, lambmax, kp);
 //    printf("c_bar=%f\n", cbar);
 //    int kbar = k_bar(lambmax, 5, cbar, yss, A.m);
@@ -1837,19 +1879,19 @@ int main(){
 //    assert(res == 0);
 
     // 5th order
-    tsr = 7*ts;
-    res = check_settling_time(A, B, C, D, X0, u, tsr, p, ts);
-    printf("res(7) = %d\n", res);
-    assert(res == 0);
-    res = check_settling_time(A, B, C, D, X0, u, 13*ts, p, ts);
-    printf("res(13) = %d\n", res);
-    assert(res == 1);
-    res = check_settling_time(A, B, C, D, X0, u, 18*ts, p, ts);
-    printf("res(18) = %d\n", res);
-    assert(res == 1);
-    res = check_settling_time(A, B, C, D, X0, u, 3*ts, p, ts);
-    printf("res(3) = %d\n", res);
-    assert(res == 0);
+//    tsr = 7*ts;
+//    res = check_settling_time(A, B, C, D, X0, u, tsr, p, ts);
+//    printf("res(7) = %d\n", res);
+//    assert(res == 0);
+//    res = check_settling_time(A, B, C, D, X0, u, 13*ts, p, ts);
+//    printf("res(13) = %d\n", res);
+//    assert(res == 1);
+//    res = check_settling_time(A, B, C, D, X0, u, 18*ts, p, ts);
+//    printf("res(18) = %d\n", res);
+//    assert(res == 1);
+//    res = check_settling_time(A, B, C, D, X0, u, 3*ts, p, ts);
+//    printf("res(3) = %d\n", res);
+//    assert(res == 0);
 
 
     // Testing
