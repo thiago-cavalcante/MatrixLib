@@ -320,19 +320,19 @@ void m_zero(double A[MAX_SIZE][MAX_SIZE], int m, int n)
 void __mltadd__(double *dp1, const double *dp2, double s, int len)
 {
   register int i;
-#ifdef VUNROLL
-  register int len4;
-  len4 = len / 4;
-  len  = len % 4;
-  for(i = 0; i < len4; i++)
-  {
-    dp1[4*i]   += s*dp2[4*i];
-    dp1[4*i+1] += s*dp2[4*i+1];
-    dp1[4*i+2] += s*dp2[4*i+2];
-    dp1[4*i+3] += s*dp2[4*i+3];
-  }
-  dp1 += 4*len4;    dp2 += 4*len4;
-#endif
+//#ifdef VUNROLL
+//  register int len4;
+//  len4 = len / 4;
+//  len  = len % 4;
+//  for(i = 0; i < len4; i++)
+//  {
+//    dp1[4*i]   += s*dp2[4*i];
+//    dp1[4*i+1] += s*dp2[4*i+1];
+//    dp1[4*i+2] += s*dp2[4*i+2];
+//    dp1[4*i+3] += s*dp2[4*i+3];
+//  }
+//  dp1 += 4*len4;    dp2 += 4*len4;
+//#endif
   for(i = 0; i < len; i++)
     dp1[i] += s*dp2[i];
 }
@@ -433,23 +433,23 @@ double __ip__(const double *dp1, const double *dp2, int len)
   register int i;
   register double sum;
   sum = 0.0;
-#ifdef VUNROLL
-  register int len4;
-  register double sum1, sum2, sum3;
-  sum1 = sum2 = sum3 = 0.0;
-  len4 = len / 4;
-  len  = len % 4;
-
-  for(i = 0; i < len4; i++)
-  {
-    sum  += dp1[4*i]*dp2[4*i];
-    sum1 += dp1[4*i+1]*dp2[4*i+1];
-    sum2 += dp1[4*i+2]*dp2[4*i+2];
-    sum3 += dp1[4*i+3]*dp2[4*i+3];
-  }
-  sum  += sum1 + sum2 + sum3;
-  dp1 += 4*len4;	dp2 += 4*len4;
-#endif
+//#ifdef VUNROLL
+//  register int len4;
+//  register double sum1, sum2, sum3;
+//  sum1 = sum2 = sum3 = 0.0;
+//  len4 = len / 4;
+//  len  = len % 4;
+//
+//  for(i = 0; i < len4; i++)
+//  {
+//    sum  += dp1[4*i]*dp2[4*i];
+//    sum1 += dp1[4*i+1]*dp2[4*i+1];
+//    sum2 += dp1[4*i+2]*dp2[4*i+2];
+//    sum3 += dp1[4*i+3]*dp2[4*i+3];
+//  }
+//  sum  += sum1 + sum2 + sum3;
+//  dp1 += 4*len4;	dp2 += 4*len4;
+//#endif
   for(i = 0; i < len; i++)
   {
     sum  += dp1[i]*dp2[i];
@@ -839,15 +839,14 @@ void rot_cols(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i,
               unsigned int k, double c, double s, double out[MAX_SIZE][MAX_SIZE])
 {
   unsigned int j;
-  double temp;
+  double temp, temp1, temp2;
   m_copy(mat, out, dim, dim);
   for(j = 0; j < dim; j++)
   {
     temp = c*m_entry(out, dim, dim, j, i) + s*m_entry(out, dim, dim, j, k);
-    out[j][k] = (-s*(((j)<dim && (i)<=dim) ? \
-            (out)[(j)][(i)] : (0)) +
-        	c*(((j)<dim && (k)<=dim) ? \
-            (out)[(j)][(k)] : (0)));
+    temp1 = (((j)<dim && (i)<=dim) ? (out)[(j)][(i)] : (0));
+    temp2 = (((j)<dim && (k)<=dim) ? (out)[(j)][(k)] : (0));
+    out[j][k] = (-s*temp1 +	c*temp2);
     out[j][i] = temp;
   }
 //  return (out);
@@ -858,15 +857,14 @@ void rot_rows(double mat[MAX_SIZE][MAX_SIZE], unsigned int dim, unsigned int i,
               unsigned int k, double c, double s, double out[MAX_SIZE][MAX_SIZE])
 {
   unsigned int j;
-  double temp;
+  double temp, temp1, temp2, temp3;
   m_copy(mat, out, dim, dim);
   for(j = 0; j < dim; j++)
   {
-    temp = c*m_entry(out, dim, dim, i, j) + s*m_entry(out, dim, dim, k, j);
-    out[k][j] = (-s*(((i)<dim && (j)<=dim) ? \
-                       (out)[(i)][(j)] : (0)) +
-        		       c*(((k)<dim && (j)<=dim) ? \
-                       (out)[(k)][(j)] : (0)));
+	temp = c*m_entry(out, dim, dim, i, j) + s*m_entry(out, dim, dim, k, j);
+	temp1 = (((i)<dim && (j)<=dim) ? (out)[(i)][(j)] : (0));
+	temp2 = (((k)<dim && (j)<=dim) ? (out)[(k)][(j)] : (0));
+    out[k][j] = (-s*temp1 + c*temp2);
     out[i][j] = temp;
   }
 //  return (out);
@@ -891,14 +889,16 @@ static void hhldr3rows(double A[MAX_SIZE][MAX_SIZE], int dim, int k, int i0,
                        double beta, double nu1, double nu2, double nu3,
                        double A_temp[MAX_SIZE][MAX_SIZE])
 {
-  double ip, prod;
+  double ip, prod, temp1, temp2, temp3;
   int i;
   m_copy(A, A_temp, dim, dim);
   i0 = min(i0, dim-1);
   for(i = 0; i <= i0; i++)
   {
-    ip = nu1*m_entry(A_temp, dim, dim, i, k) + \
-         nu2*m_entry(A_temp, dim, dim, i, k+1)+nu3 * m_entry(A_temp, dim, dim, i, k+2);
+	temp1 = nu1*m_entry(A_temp, dim, dim, i, k);
+	temp2 = nu2*m_entry(A_temp, dim, dim, i, k+1);
+	temp3 = nu3*m_entry(A_temp, dim, dim, i, k+2);
+    ip = temp1 + temp2 + temp3;
     prod = ip*beta;
     A_temp[i][k] += (-prod*nu1);
     A_temp[i][k+1] += (-prod*nu2);
@@ -967,15 +967,9 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE],
         k_max = k;
         break;
       }
-      printf("test\n");
-      printf("k_max=%d\n", k_max);
-      printf("k_min=%d\n", k_min);
     if(k_max <= k_min)
     {
       k_min = k_max + 1;
-      printf("test2\n");
-      printf("k_max=%d\n", k_max);
-      printf("k_min=%d\n", k_min);
       continue;      /* outer loop */
     }
     /* check to see if we have a 2 x 2 block
@@ -1173,8 +1167,6 @@ void schur(double A[MAX_SIZE][MAX_SIZE], int dim, double Q[MAX_SIZE][MAX_SIZE],
         }
 	}
   }
-  printf("test3\n");
-  printf("k_max=%d\n", k_max);
   /* polish up A by zeroing strictly lower triangular elements
      and small sub-diagonal elements */
   for(i = 0; i < dim; i++)
@@ -1283,9 +1275,9 @@ void x_k(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE], int dim, do
     m_copy(AUX3, xk.xk, dim, 1);
 //    xk.xk = AUX3;
   }
-  for(int i=0;i<dim;i++){
-  	printf("x(%d)=%f\n", i, xk.xk[i][0]);
-  }
+//  for(int i=0;i<dim;i++){
+//  	printf("x(%d)=%f\n", i, xk.xk[i][0]);
+//  }
 }
 
 /* y_k2 -- computes the output signal in the k-th sample */
@@ -1300,13 +1292,13 @@ double y_k2(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
 //  print_arr(C, 1, dim);
 //  print_arr(xk.xk, dim, 1);
   m_mlt(C, 1, 5, xk.xk, 5, 1, AUX);
-  printf("AUX[0][0]=%f\n", AUX[0][0]);
+//  printf("AUX[0][0]=%f\n", AUX[0][0]);
 //  print_arr(AUX, 1, 1);
   temp = D[0][0] * u;
   y = AUX[0][0] + temp;
-  printf("D=%f\n", D[0][0]);
-  printf("u=%f\n", u);
-  printf("temp=%f\n", temp);
+//  printf("D=%f\n", D[0][0]);
+//  printf("u=%f\n", u);
+//  printf("temp=%f\n", temp);
   return y;
 }
 
@@ -1410,29 +1402,29 @@ PKVL peak_output(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
 {
   PKVL out;
   double greater, cmp, o;
-  int i = 0, j=0;
+  int i = 0;
   greater = sp_fabs(y_k2(A, B, C, D, u, i, dim));
   o = y_k2(A, B, C, D, u, i+1, dim);
   cmp = sp_fabs(o);
 //  printf("greater=%f\n", y_k2(A, B, C, D, u, 1, dim));
   while((cmp >= greater))
   {
-    printf("(%f >= %f)\n", cmp, greater);
+//    printf("(%f >= %f)\n", cmp, greater);
     if(greater < cmp)
     {
-      printf("(%f < %f)\n", greater, cmp);
+//      printf("(%f < %f)\n", greater, cmp);
       greater = cmp;
       out.mp = o;
       out.kp = i+2;
 //      printf("greater1=%f\n", y_k2(A, B, C, D, u, i+1, dim));
-      j++;
+//      j++;
     }
     else
     {
       out.mp = o;
       out.kp = i+2;
 //      printf("greater2=%f\n", y_k2(A, B, C, D, u, i+1, dim));
-      j++;
+//      j++;
     }
     if(!is_same_sign(yss, out.mp))
     {
@@ -1442,7 +1434,7 @@ PKVL peak_output(double A[MAX_SIZE][MAX_SIZE], double B[MAX_SIZE][MAX_SIZE],
     o = y_k2(A, B, C, D, u, i+1, dim);
     cmp = sp_fabs(o);
   }
-  printf("j=%d\n", j);
+//  printf("j=%d\n", j);
   return out;
 }
 
